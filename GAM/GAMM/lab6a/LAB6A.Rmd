@@ -1,0 +1,195 @@
+---
+title: '6a: Random intercepts and random slopes'
+author: "Eser Comak"
+date: "December 18, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Preparations
+```{r cars}
+#install.packages(c("mgcv", "itsadug", "colorspace"), repos="https://cloud.r-project.org")
+#load packages
+library(mgcv)
+library(itsadug)
+library(colorspace)
+library(plyr)
+#load data
+rm(list=ls())
+
+# load data:
+load("C:/Users/eserc/Desktop/HMC/second year/Ib/Advanced statistical modelling/GAMM/lab6a/dat.rda")
+head(dat)
+```
+
+
+```{r}
+ #AVERAGES:
+avg <- ddply(dat, c("Timebin", "Length", "PairType", "Fan"), summarise,
+             F3 = mean(F3, na.rm=TRUE))
+
+
+# SETUP EMPTY PLOT WINDOW:
+plot(c(), c(),
+     xlim=range(avg$Timebin), ylim=range(avg$F3), 
+     main="Target", ylab="F3 Amplitude", xlab="Time (ms)",
+     bty='n')
+abline(h=0, v=0, lty=c(1,3))
+
+# ADD LINES FOR CONDITIONS:
+with(avg[avg$Length=="Short" & avg$PairType=="Target" & avg$Fan==1,],
+  lines(Timebin, F3, type='l', lwd=1.5))
+with(avg[avg$Length=="Short" & avg$PairType=="Target" & avg$Fan==2,],
+  lines(Timebin, F3, type='l', col=2, lwd=1.5))
+with(avg[avg$Length=="Long" & avg$PairType=="Target" & avg$Fan==1,],
+  lines(Timebin, F3, type='l', lty=4))
+with(avg[avg$Length=="Long" & avg$PairType=="Target" & avg$Fan==2,],
+  lines(Timebin, F3, type='l', col=2, lty=4))
+
+# LEGEND:
+legend_margin('topright', legend=c("Fan 1, short", "Fan 2, short", "Fan 1, long", "Fan 2, long"),
+              col=rep(1:2, 2), lwd=rep(c(1.5,1), each=2), lty=rep(c(1,4), each=2), bty='n')
+```
+
+```{r}
+#NOTE: EEG amplitudes are conventionally plotted with the negative values upwards and positive values downwards. To reverse the y-axis, just re-arrange the ylim values as illustrated below.
+plot(c(), c(),
+     xlim=range(avg$Timebin), ylim=rev(range(avg$F3)), 
+     main="Target", ylab="F3 Amplitude", xlab="Time (ms)",
+     bty='n')
+abline(h=0, v=0, lty=c(1,3))
+
+# ADD LINES FOR CONDITIONS:
+with(avg[avg$Length=="Short" & avg$PairType=="Target" & avg$Fan==1,],
+  lines(Timebin, F3, type='l', lwd=1.5))
+with(avg[avg$Length=="Short" & avg$PairType=="Target" & avg$Fan==2,],
+  lines(Timebin, F3, type='l', col=2, lwd=1.5))
+with(avg[avg$Length=="Long" & avg$PairType=="Target" & avg$Fan==1,],
+  lines(Timebin, F3, type='l', lty=4))
+with(avg[avg$Length=="Long" & avg$PairType=="Target" & avg$Fan==2,],
+  lines(Timebin, F3, type='l', col=2, lty=4))
+
+# LEGEND:
+legend_margin('topright', legend=c("Fan 1, short", "Fan 2, short", "Fan 1, long", "Fan 2, long"),
+              col=rep(1:2, 2), lwd=rep(c(1.5,1), each=2), lty=rep(c(1,4), each=2), bty='n')
+```
+
+
+
+
+```{r}
+#order data
+dat <- dat[order(dat$Subject,dat$Length,dat$PairType,dat$Fan,dat$Timebin), ]
+```
+
+
+##Part I. Random effects
+#Q1. 1-D smooths
+First, we would like to investigate whether there is a difference in ERP response to the type of pair (Target, New Foil and Re-paired Foil). Setup a GAM model that includes an interaction between PairType and Timebin. Use the channel F3 as dependent variable.
+```{r}
+#make pairtype categorical again
+dat$PairType <-as.factor(dat$PairType)
+
+#model
+m1 <- bam(F3 ~ PairType + s(Timebin, by = PairType) , data=dat, discrete = TRUE)
+summary(m1)
+```
+
+Inspect the summary.
+
+**What does the intercept represent?  **
+mean ERP value when Timebin is at 0 and pair tye is new.
+
+**Which estimates do we need to sum up for plotting the regression line of PairType RPFoil?  **
+-0.61958 + 0.09685 + 8.932
+**What can we conclude from the smooth term summary about the differences between the three PairType conditions?  **
+the intteraction has similair effects....
+
+
+Visualization of the estimated regression lines.
+```{r}
+#Run the following code for visualizing the summed effects
+plot_smooth(m1, view="Timebin", plot_all="PairType", v0=0)
+```
+Describe at which moment the conditions seem to diverge.  
+
+<ans> It looks like they start to diverge right around 600ms time mark </ans>
+
+```{r}
+#The code below could be used to visualize the differences between the conditions. Run the code:
+
+plot_diff(m1, view="Timebin", comp=list(PairType=c("Target", "RPFoil")), v0=0)
+plot_diff(m1, view="Timebin", comp=list(PairType=c("Target", "NewFoil")), v0=0)
+```
+What do the difference plots represent?
+
+<ans> </ans>
+```{r}
+#Inspect the residuals of the model using a QQ-norm plot and a fitted vs residuals plot:
+qqnorm(resid(m1))
+qqline(resid(m1))
+
+plot(fitted(m1), resid(m1))
+```
+What do you conclude about the model fit when you see the model's residuals?
+
+<ans> </ans>
+
+
+
+##Q3. Random intercepts
+#Extend model m1 with random intercepts for participants. Make sure that the participant number is converted to a factor.
+```{r}
+#make subjct categorical again
+dat$Subject <-as.factor(dat$Subject)
+m2 <- bam(F3 ~ PairType + s(Timebin, by = PairType) + s(Subject, bs ="re"), data=dat, discrete = TRUE)
+summary(m2)
+```
+
+Why is the estimated edf of the random effect term so large?
+Do you think the random intercept for participants contributed to the model? Why (not)?
+
+```{r}
+plot_smooth(m1, view="Timebin", plot_all="PairType", v0=0)
+plot_smooth(m2, view="Timebin", plot_all="PairType", v0=0, rm.ranef=TRUE)
+
+qqnorm(resid(m2))
+qqline(resid(m2))
+
+plot(fitted(m2), resid(m2))
+```
+
+```{r}
+
+attach(dat)
+dat$Event <- interaction(dat$Subject, dat$Length, dat$PairType, dat$Fan, drop = TRUE)
+
+#n parameter specifies th number of red lines
+plot_modelfit(m2, view = "Timebin",event=dat$Event)
+```
+
+##PART 2
+#interaction non linear
+```{r}
+
+attach(dat)
+dat <- dat[order(Subject,Length,PairType,Fan,Timebin), ]
+```
+non l
+#random smooths
+```{r}
+#EITHER random intrcepts and random slopes or random smooths
+
+attach(dat)
+# fs is factor smooth
+m4<-bam(F3~PairType + s(Timebin, by=PairType) +s(Timebin, Subject, bs="fs", m=1),data = dat, discrete = TRUE)
+plot(m4)
+
+#modl fits
+plot_modelfit(m4, view = "Timebin",event=dat$Event)
+
+summary(m4)
+```
