@@ -1,0 +1,303 @@
+**Questions to ask  **
+Question 6 - Can you calculate the estimated reaction times for each type of prime based on the model’s coefficients?  
+
+
+---
+title: "Lab2 interactions"
+author: "Eser Comak"
+date: "November 26, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Interactions-Linear Model
+
+#Preparations
+```{r}
+#Start with an empty working environment:
+rm(list=ls())
+
+#Install or update the the package languageR. This package contains the data set that we will be using.
+#install.packages("languageR", repos = "http://cran.r-project.org")
+
+#Load the package and store the data set in variable dat:
+library(languageR)
+# access the data set primingHeid
+help("primingHeid")
+dat <- primingHeid
+attach(dat)
+```
+
+##Part I. Descriptive Statistics
+#Question 1: Inspection of the data
+```{r}
+#Inspect the data frame with functions, such as head, str, table (or others).
+head(dat$Word)
+
+#participants
+levels(dat$Subject)
+
+```
+**How many participants (i.e., subjects) performed in this experiment?  **
+
+26
+
+**How many unique neologisms does the data contain? Hint: look at the variable Word.  **
+
+40
+
+**Look at the columns Subject and Condition. Did the participants perform only one or both conditions? Does this reflect a between or within-subjects design?  **
+
+Subjects perfomed in both conditions. Within subject design.
+
+**The researchers were interested in the effect of the priming condition on the reaction times to the neologisms at the second encounter. The conditions are logged in column Condition. The level ‘baseheid’ means that the first encounter was the base of the neologism. The level ‘heid’ means that the first encounter was the full neologism. The reaction times are stored in column RT. The values in this column are log transformed. In the next assignment we will explain more why this is a good idea.  **
+
+
+#Question 2: Data cleaning
+
+**The current data set only contains examples of correct responses to second ecounters. Therefore, we only have reaction times for second encounter trials in which the response was correct.  **
+```{r}
+#exclude incorrect responses
+data_c<-droplevels(dat[ResponseToPrime =="correct",])
+
+```
+
+**Why is it important to remove incorrect trials? Hint: think about the interpretation of the reaction times to incorrect trials.  **
+
+Incorrect trials might have occured different reasons such as attention and working memory. Also RT of incorrect trials can create outlier effect which we dont want it to affect our intepretations of the mean RT result.
+
+#Question 3: Visualizing the effect of priming condition on reaction times
+
+**Before we run a linear model, it is always a good idea to plot the data first. In this case, we want to make a boxplot of the reaction times to neologisms in both conditions.  **
+```{r}
+#Create a boxplot that visualizes the distribution of the reaction times in the two conditions.
+boxplot(RT ~ Condition, data=data_c, col='gray')
+#inspect boxplot
+```
+
+**Can you see differences in the variance or spread of reaction times between the condition?  **
+
+The range of heid condition is bigger. Additionally all quartiles in heid condition cover wider ranges compared to baseheid condition
+
+**Which condition seems to have faster reaction times? How does this correspond with the prediction of the researchers?  **
+
+The mean RT for heid condition is slightly higher(remember it is log) It sort of does not support their hypothesis that priming effect will shorten the RT times but the difference is not that big.
+
+**Notice that some values, visible as points, are out of bounds in the boxplot (inlcuded as points). - What does it mean that values are outside of the boxplot area?  **
+
+They are the outlaws :P. Joking, they are outliers.
+##Part II. Linear regression
+
+**Now we are going to run our first linear model. In this model we only include the effect of priming condition  Condition on the reaction times at the second encounter RT.  **
+
+#Question 4: Linear model
+```{r}
+#Run the model. Replace … with the correct formula (dependent variable and the predictor).
+m1 <- lm(RT~Condition, data = dat)
+
+```
+
+#Question 5: Interpretation
+```{r}
+#Inspect the summary of the model (summary(m1)):
+summary(m1)
+```
+
+**What does the intercept represent?  **
+
+mean reaction time for baseheid condition
+
+**What is the reference level of our predictor Condition?  **
+
+baseheid
+
+**What does the the regression estimate reveal about the effect of Condition? What does it mean that the estimate is / is not significant?  **
+
+that the condition heid doesnt have any significant performance difference compared to the base condition. the significant intercept just means that the value is different than zero.
+
+
+#Question 6: A closer look at the data
+
+**The idea of priming is that prior processing of a word enhances processing of related words in memory. By only looking at the effect of condition, we are ignoring two important sources of variation. The first source of variation is the accuracy of the response to the first encounter. Notice that in column ResponseToPrime not all responses where in fact correct. This means that participants sometimes incorrectly judged the base or full neologism as a non-word. Yet we only have correct responses to the second encounter, suggesting that participants have revised their decision.  **
+
+```{r}
+#Did people judged one of the priming conditions more often as a non-word from the start? Hint: use table, or alternatively you could find the answer with tapply/ddply
+count(dat, vars = c("Condition","ResponseToPrime"))
+#or
+table(dat$Condition,dat$ResponseToPrime)
+
+```
+
+**What is your conclusion, do we see a difference between the conditions in how often the prime was responded to correctly?  **
+heid condition had more incorrect trials than baseheid
+
+**A second source of variation is the reaction time to the words in the first encounter. One can imagine that the reaction time to the first and second encounter correlate irrespective of any priming effects. Run the following code to plot the reaction time to the first and second encounter.  **
+
+#Question 6 cont'd
+```{r}
+plot(x = dat$RTtoPrime,
+     y = dat$RT,
+     xlab = "Log RT to Prime Words",
+     ylab = "Log RT to Target Words",
+     xlim = c(5.5,7.5),
+     ylim = c(5.5,7.5))
+
+# plot a regression line based on a linear regression model with RT 
+# as dependent and RTtoPrime as predictor:
+m2 <- lm(RT ~ RTtoPrime, data = data)
+abline(m2, col = "orange") 
+
+```
+
+**What does this plot tell us about the effect of the reaction time to the first encounter (prime words) to the response time on the second encounter (target words)?  **
+
+between log rt 6.0 to 7.0 there is a larger correlation compared to the whole data set. In summary, the correlation between all of these values are positive but weak. 
+
+**Before including these two sources of variation to the model, we first inspect whether the type of prime (base or base+‘heid’) influences the reaction times on the prime (i.e., first encountered word). Fit a linear regression model to analyse the effect of priming condition on the reaction time to the first encounter. Replace … with the formula. **
+
+#Question 6 cont'd
+```{r}
+#Inspect the summary of m3.
+m3 <- lm(RTtoPrime ~Condition, data = dat)
+
+summary(m3)
+
+```
+
+**What does the intercept represent?  **
+
+It represents the mean of RT to prime for condition baseheid
+
+**What does the summary suggest about the effect of priming condition?  **
+
+it has significant effect with 0.21345 slope coefficient. so going from base heid to heid condition increases logRT value by 0.21345 on average.
+
+**Can you calculate the estimated reaction times for each type of prime based on the model’s coefficients?  **
+
+rt for baseheid is 6.50285 and for heid it is 6.7163
+
+#Part III. Increasing complexity
+
+**Now that we have identified two important sources of variation (i.e., answer and reaction time to the prime word), we can add these sources as predictors to model m1 (see Question 4). By including these predictors, we can account for the variation of the two sources.  **
+
+#Question 7: Multiple predictors
+
+**Add the predictors RTtoPrime and ResponseToPrime to the earlier defined linear regression model. Replace … with the updated model formula. Note: Do not include an interaction yet.  **
+
+```{r}
+#Inspect the summaries of m1 and m4:
+m4 <- lm(RT~Condition + RTtoPrime + ResponseToPrime, data = dat)
+summary(m4)
+
+```
+
+**What does the intercept in model m4 now represent? **
+
+the mean response RT when all predictors are 0. In other words the mean respose RT when Condition is baseheid, RTtoPrime is 0 and Response to Prime is correct.
+
+**What does the regression estimate of Condition tell us in model m4? Compare the estimate with the estimate in model m1. Has the estimated difference changed with including other predictors?  ** 
+
+It means the slope will be decreased by -0.7520 on top of baseheid condition when RTtoPrime is zero and ResponseToPrime is correct. Yes the estimate in model m1 is different than m4.
+
+**What is the effect of ResponseToPrime on RT? How do we interpret the regression estimate?  **
+
+When the condition is baseheid and RTtoPrime is zero, there is a 0.10927 increase in the slope going from Response to Prime correct to incorrect level. 
+
+**What is the effect of RTtoPrime on RT? What does the regression estimate say here?  **
+
+When the condition is baseheid and response to prime is correct, each RT increase is accompanied by 0.4478 weighted RTtoPrime increase. There is a good correlation between RT and RTtoPrime
+
+
+#Question 8: Visualizing interaction
+
+**The reaction time to the prime words and the accuracy of the responses to the prime words are good predicors of the reaction times on target words. An interesting follow-up question is if these two predictors also interact. To see if this might be the case, we first visualize the interaction.  **
+
+**You can plot an interaction between a categorical and numerical predictor by creating a scatter plot between the numerical predictor and the dependent variable. The points in the figure are labeled, corresponding to the two levels of the categorical predictor. Subsequently, you fit and plot a linear regression model for the effect of the numeric predictor on the dependent for the two groups in the categorical variable. You can see if there is an interaction by looking at the difference in the slopes of the regression lines. Do the slopes differ? Do the lines intersect (at some point)?  **
+
+**Replace the … in the followin R-code to plot the interaction effect of ResponseToPrime and RTtoPrime on RT:  **
+
+```{r}
+#Inspect the plot you have made:
+rm(list=ls())
+
+```
+
+**Is there an interaction effect of RTtoPrime and ResponseToPrime on RT? Hint: Do you see differences in the slopes of the regression lines? Do they intersect? Or will they at some point intersect?  **
+
+**Intepret the interaction. Does the effect of reaction time to the prime on the target seem to be different for correct and incorrect responses?  **
+
+#Question 9: Implementing interaction
+```{r}
+#Adapt model m4 to include an interaction between RTtoPrime and ResponseToPrime:
+rm(list=ls())
+
+#Inspect the summary of model m5:
+
+```
+**What is represented by the intercept?  **
+**What is represented by the regression estimate of the interaction?  **
+**How do we interpret the regression estimate of Condition? Is this different from model m4 without the interaction?  **
+**Based on the summary, do you thing that there is a significant interaction effect of RTtoPrime and  ResponseToPrime on RT?  **
+
+
+#Question 10: Visualizing the interaction
+
+**It is useful to visualize the interaction that was estimated by the model and compare the fitted effects with the observed data. This can be done in multiple ways. Below part of the code is given for a plot using the function  abline.  **
+
+```{r}
+#Inspect the plot you have made:
+rm(list=ls())
+
+```
+
+##Part IV: Model evaluation
+#Question 11: Model comparisons
+```{r}
+#Inspect the plot you have made:
+rm(list=ls())
+
+```
+
+**Compare the fits of model m1, m4, and m5 in their respective summaries, particularly look at the adjusted R2 in all three models. Which model explains the most variance/ provides the best fit of the data? **
+
+**Below the code is given to for comparing the three models directly. Explain on the basis of the output which model is preferred. **
+
+#Question 11 cont'd
+```{r}
+#Inspect the plot you have made:
+rm(list=ls())
+
+```
+
+#Question 11 cont'd
+
+**Alternatively, we could take a look at the correlation between the model fits and the observed data:  **
+```{r}
+#Inspect the plot you have made:
+rm(list=ls())
+
+```
+
+**What is the most important difference between model comparisons using an F-test and comparing the correlations between observed and fitted values? (In other words, which information is being used in the first, but not in the second method?)  **
+
+#Question 12: Checking model assumptions
+
+**Test whether the residuals of model m5 are normally distributed with a QQ-plot. Hint: use qqnorm and  qqline. **
+
+**What is your conclusion based on the QQ-plot?  **
+
+**Test whether there is heteroscedasticity in the residuals by plotting the residuals against the fitted values. See the example below:  **
+```{r}
+#Inspect the plot you have made:
+rm(list=ls())
+
+```
+
+**What is your conclusion based on the plot, does the variance change with the fitted values?  **
+
+**Test for structure in the data. One very common source of structure is the participants. Create a boxplot that visualizes the residuals split by participants (dat$Subject).  **
+
+**What is your conclusion based on the boxplot? Is there still structure in the residuals that we did not account for with the linear model?  **

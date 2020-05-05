@@ -1,0 +1,307 @@
+---
+title: "Assignment 1 Advanced Statistical Modeling"
+date: "Deadline: December 3, 2018"
+output: 
+  html_document:
+    theme: "united"
+    highlight: "pygments"
+---
+<style>
+h1 {color: #ff6600}
+h2,h3 { margin-top: 100px; }
+p, h4 { margin-top: 30px; margin-bottom: 30px; }
+ans {
+    background: #CCFFFF;
+    margin: 20pt 0pt;
+}
+</style>
+
+<p><br/></p>
+
+## Eser Comak, S3432548
+
+
+```{r}
+# clean R working environment:
+rm(list=ls())
+
+# set working directory:
+setwd("C:/Users/eserc/Desktop/HMC/second year/Ib/Advanced statistical modelling/LRM/Assignment")
+
+# Load data: The data has to be in the same folder with the Rmd file
+load("data_herlambang_behavioral.rda")
+
+#install this package to see final three way interaction plot
+options(repos=structure(c(CRAN="http://cran.r-project.org")))
+options(repos="https://cran.rstudio.com" )
+install.packages("sjPlot",repos = "https://cran.rstudio.com")
+
+# Load packages:
+library(plyr)
+library(sjPlot)
+library(ggplot2)
+
+
+# knitr settings:
+knitr::opts_chunk$set(echo = TRUE, fig.width = 4, fig.height = 4,error = TRUE)
+```
+
+
+## Question 1: Descriptive statistics [5pt]
+
+#### Q1a [1pt] 
+
+```{r}
+#count the number of unique subject entries in th data.frame
+length(unique(dat$subject))
+```
+
+**How many participants are included in the data? How many trials and blocks did each participant do?  **
+
+<ans>20 participants are included in this data.frame</ans>
+
+
+```{r}
+#reward check for blocks
+rewardPerBlock<-data.frame(table(dat$subject,dat$condition,dat$block))
+#filter out unrewarded blocks
+filteredOut<-subset(rewardPerBlock, Var2 == "reward" & Freq == 48)
+#check whether all participants received rewards in the same block
+table(filteredOut$Var1)
+```
+
+**The column `condition` marks whether the participant received a reward in this block or not. In which blocks were rewards given?  **
+
+<ans>In the subsetted data frame("**filteredOut**"), first column represents subject numbers, second colum represents the reward condition, third column represents the block number and the last column represents freq of rewarded trials for the given block for the subject in the first column.After inspecting the subsetted data.frame, we can see only blocks 2,4,6,8,10,12 and 14 are awarded(n = 7)</ans>
+
+**Did all participants receive a reward in the same block?  **
+
+<ans>Using the table function on subject column of filteredOut data.frame, we realize each subject were rewarded 7 times. Since the rewarded condition count is 7(check previous answer), we can deduce that each participant was awarded in the same block</ans>
+
+#### Q1b [1pt]
+
+The column response_space marks whether the space bar was pressed to enter the response (‘Space’), or whether the participant waited until the answer prompt automatically appeared (‘None’). Depending on the number of errors, the time until the answer prompt appeared was slowly reduced.
+
+The code below provides the code for the average proportion that the space bar was pressed per block. We will only include the trials for which at least one of the two counts is correct (i.e., correct is 0.5 for one counter correct, or 1 for both counters correct).
+
+```{r}
+dat.cor <- droplevels(dat[dat$correct > 0,])
+
+avg <- ddply(dat[dat$correct > 0,], c("block", "condition"), 
+             summarise,
+             space=mean(response_space=="space", na.rm=FALSE))
+
+# setup empty plot:
+plot(c(),c(), 
+          xlim=range(avg$block), ylim=c(0.5,1),
+          main="Pressed space bar",
+          ylab="Proportion", xlab="Block", 
+          bty='n')
+# add the gray line:
+lines(avg$block, avg$space, col='gray')
+# add lines and points for each condition:
+with(avg[avg$condition=="reward",], # with(<data>, <do something>), see help(with)
+     lines(block, space, lwd=1.5, lty=3, type='o', pch=21, bg='white', col=2))
+with(avg[avg$condition=="no_reward",], 
+     lines(block, space, lwd=1.5, lty=3, type='o', pch=15, bg='white', col=1))
+# add legend:
+legend('topright', legend=c("reward", "no reward"), 
+       lwd=1.5, col=2:1, pch=c(21,15), pt.bg="white", bty='n')
+```
+
+**Inspect the plot. Describe the effect of condition and block on the proportion of space bar being pressed.   **
+
+<ans>Based on the outputted plot, it seems like the early in the experiment(block number <= 5), the reward condition motivates subjects to press space more often. However, after 4th block, there is a drop in the space bar proportion. This might have been due to the desensitization to rewards./ans>  
+
+<ans>Meanwhile, for the no reward condition, due to practice effect, the proportion of pressed space bar increases over time. One conclusion might be that as the participants become more and more proficient at their tasks and become desensitized, the proportion difference for space bar presses decreases./ans>  
+
+<ans>Another conclusion might be that if the participants know that there are 14 blocks, they might get a final burst of motivation to complete the task. This may explain the sudden decrease in the proportion of space bar presses for the last 3 blocks. In this case, still the desensitization for the rewards exist as the proportion decreases early in the experiment and it recovers slowly over the blocks.</ans>
+
+
+#### Q1c [3pt]
+
+```{r}
+#Calculate the mean response latency per block, condition, and response_space (only for the responses that are (partly) correct, so using data dat.cor).
+RTspace <- ddply(dat.cor, c("block", "condition","response_space"), 
+             summarise,
+             space=mean(response_time_space, na.rm=FALSE))
+
+#Visualize how the response latencies change per condition, per block, and per response condition (i.e.,  response_space). 
+
+#create empty plot
+plot(0,
+          xlim=range(1:14), ylim=c(3000,6000),
+          main="Space key response latencies",
+          ylab="RT(ms)", xlab="Block", 
+          bty='n')
+
+#create color coded labels for reward/non-reward condition
+colorlist = c("black","green")
+colorSequence = rep(c(1,2), times = 7)
+xAxisColorCodes = colorlist[colorSequence]
+
+#map the color green for reward condition and color black for non-reward condition
+Map(axis, side=1, at=1:14, col.axis=xAxisColorCodes, lwd=0, las=1)
+
+# add the gray line:
+lines(RTspace$block, RTspace$space, col='gray')
+# add lines and points for space condition:
+with(RTspace[RTspace$response_space=="space",],
+    lines(block, space, lwd=1.5, lty=3, type='o', pch=21, bg='white', col=2))
+with(RTspace[RTspace$response_space=="None",],
+    lines(block, space, lwd=1.5, lty=3, type='o', pch=15, bg='white', col=1))
+# add legend:
+legend('topright', legend=c("Space", "None"), 
+       lwd=1.5, col=2:1, pch=c(21,15), pt.bg="white", bty='o')
+
+```
+
+**Interpretation of Plot  **
+
+<ans>Above plot, the reward/non-reward condition is specified as x axis label colors. Green represents rewarded blocks and black represents non-rewarded blocks. To differentiate between space and none levels of response_space variable we used black squares to represent "None" level and red circles for "Space" level  </ans>
+
+<ans>Both levels of variable "response_space" exhibit decreasing trend for RT(ms) over the blocks. Furthermore, there are consistend RT dips in "None" level where the block is rewarded. Conversely, there are RT peaks in "Space" level where the block is not rewarded. </ans>
+
+
+## Question 2: Preparing data for analysis [5pt]
+
+#### Q2a [2pt]
+
+
+```{r}
+#Plot the distribution of the reaction times using a QQ-plot (functions `qqnorm` and `qqline`). Include the plot and the code in your report.
+qqnorm(dat.cor$response_time_space)
+qqline(dat.cor$response_time_space)
+
+```
+
+**Are the reaction times following a normal distribution? Describe how you can see in the QQ-plot whether the reaction times follow a normal distribution.  **
+
+<ans>No, the distribution is not normal. We can deduce this by looking at the invidual RT recordings represented as dots following along the qqline. QQline predicts the value of each RT measurement based on normal distribution and when we see points deviating from the line it signals that the distribution is not normal. It is acceptable to have little bit of deviance at the start and end of the qqline, but in our case the deviance is far too much to ignore </ans>
+
+#### Q2b [3pt]
+
+```{r}
+#Inspect the reaction times. Include the code in your report.
+outliers<-boxplot(dat.cor$response_time_space)
+hist(dat.cor$response_time_space)
+
+#remove outliers 1.5*IQR
+dat.cor2<-dat.cor[!dat.cor$response_time_space %in% outliers$out ,]
+
+#remove outliers (response<= 1000ms)
+dat.cor<-dat.cor[!dat.cor$response_time_space <= 1000 ,]
+```
+
+**Are there obvious outliers (i.e., values that are clearly problematic)? Explain why you think these points are outliers. If there are any clear outliers, remove these from the data. Include the code in your report.  **
+
+<ans>I would say any reaction time equal or lower than 1000ms should be removed as  pressing a button would take nearly 150ms and counting each new letter then adding up to find a total would take more than 850ms. But to inform ourselves better about the potential differences, we will duplicate our data.cor into data.cor2 and for the data.cor2 we will remove values that are outside 1.5IQR. IQR is the difference between 75th and 25th quartiles. Then for data.cor we will remove response_time_space<= 1000ms </ans>
+
+```{r}
+#histograms for dat.cor2
+dat.cor2$logRT <- log(dat.cor2$response_time_space)
+hist(dat.cor2$response_time_space)
+hist(dat.cor2$logRT)
+
+#histograms for dat.cor
+dat.cor$logRT <- log(dat.cor$response_time_space)
+hist(dat.cor$response_time_space)
+hist(dat.cor$logRT)
+```
+
+<ans>Based on the histograms of dat.cor and dat.cor2, we will use dat.cor dataframe for the future calculations and predictions. The histogram of dat.cor better approximates normal distribution. Not only that, the highest RT value removed in dat.cor2 is 446( it can be found with "tail(outlier_values)" command). 446ms is already too fast for such task.</ans>
+
+
+**Name a characteristic of this set of reaction times that make it difficult to transform the data so that it approximates a normal distribution. (Hint: Plot a histogram if you cannot see it in the QQ plot.)  **
+
+<ans>The task requires one to calculate the toal number(n=2) of target letters for each letter one being letter "a". Counting seperate occurances of target letters takes time in itself then addition task takes further time. It is natural for most of the participants to submit their score towards the end of the 5s presentation of final pseudo-word. This makes the distribution highly left skewed. This kind of problem occurs in reaction time studies. A different bias might have happened if the task required one to respond as quick as possible for a particular task. In these type of cases it is better to rely on median RT as a central tendency. Median RT is closer to the bulk of the data so it provides a more realistic estimate for central tendency. </ans>
+
+
+## Question 3: Linear regression model [6pt]
+
+#### Q3a [4pt] 
+
+```{r}
+#To investigate whether the predictors block and condition influence the response latencies, we set-up a linear model that includes these predictors, and also the predictor  response_space, and all the interactions between the three predictors. The model is fit on the untransformed reactions times of the data frame dat.cor (after excluding outliers in question 2b, if you considered this necessary).
+
+#linear model that is built on dat.cor.
+m1 <- lm(response_time_space~block*condition*response_space, data=dat.cor)
+summary(m1)
+```
+
+**What is represented by the intercept? **
+
+<ans>It represents the mean RT "response_time_space" time when block variable is 0, condition is not rewarded and response to space is None</ans>
+
+**What does the estimate `block` represent? What can you conclude from it's value in the summary?  **
+
+<ans>With each progression into new block, the mean RT for "response_time_space" decreases by 2.285ms assuming every other variables' effect are fixed. </ans>
+
+**What does the estimate `response_spacespace` represent? What can you conclude from it's value in the summary?  **
+
+<ans>Pressing space bar affects the intercept value by lowering RT "response_time_space" by 1179.506ms assuming every other variables' effect are fixed</ans>
+
+**What does the estimate `block:conditionreward` represent? What can you conclude from it's value in the summary? (Hint: for this question you can ignore the other interactions, and just focus on this estimate.)  **
+
+<ans>While subjects progress through the blocks, when condition is rewarded compared to non-rewarded, the intercept decreases by 18.566ms.Note that this effect occurs only when the block is rewarded, thus the interaction. In otherwords the slope for block variable is further decreased by 18.566ms (4790.494-2.285-18.566 = ...) when condition is awarded</ans>
+
+
+#### Q3b [2pt]
+
+Use a QQ-plot to visualize the distribution of the residuals of the model. Hint: you can extract the residuals from the model using `resid(m1)`.
+
+```{r}
+#We visualize the residuals to see whether the residuals are normally distributed (one of the assumptions of linear regression).
+#QQ-plot of the residuals:
+
+qqnorm(resid(m1))
+qqline(resid(m1))
+
+```
+
+**Compare the QQ-plot of the residuals with a QQ-plot of the input data (i.e., the dependent variable, the un-transformed reaction times; see Question 2a). The distribution of the residuals looks much closer to the normal distribution than the original data. Why do the residuals show a different pattern as the data?  **
+
+<ans>Due to beta averaging, beta values in a regression model are centered on the true value of sampling distribution. Thats why the predictions are normally distributed. Now if we add or substract any number from predictions that are normally distributed, we will still get a normal distribution and this is what we call as residuals. This is the reason why qqplot of residuals approximate normal distribution better. On the other hand the distribution of dependent variable only depends on the measured values of RT, thus it reveals what kind of distribution it has since we are not doing any averaging like we do in regression model(I mean beta averaging)  </ans>
+
+
+## Question 4: Visualize estimates [4pt]
+
+#### Q4a [2pt]
+
+```{r}
+# create a new data file:
+newd <- expand.grid(block = 1:14,
+                    condition = as.factor(c("reward", "no_reward")),
+                    response_space=as.factor(c("space", "None")), stringsAsFactors = FALSE)
+
+# generate predictions (fitted values) for each condition:
+fv <- predict(m1, newd, se.fit=TRUE)
+newd$fit <- fv$fit
+newd$se  <- fv$se.fit
+
+head(newd)
+```
+
+**What are the fitted effects of a statistical model? (They can be extracted using `fitted`, but also with `predict`.)  **
+
+<ans>Using the linear model equations created in "m1" linear model, predict function calculates RT means of response_time_space for differnt combination of conditions. In our case block, reward/nonreward, space/None provided in the newd data.frame are used to make combinations.</ans>
+
+```{r}
+#Plot the model estimates of `newd`. Include the code and the plot in your report. 
+
+plot_model(m1, type = "pred", terms = c("block", "condition", "response_space"))
+
+```
+
+#### Q4b [2pt]
+
+**Based on the plots, explain which predictor has the largest influence on the participants' reaction times.  **
+
+<ans>response_space</ans>
+
+**Describe in words the interaction between `block`, `condition`, and `response_space`. Hint: look at the plot.  **
+
+<ans>Pressing space button lowers the RT a lot compared to any other variables. Rewarding blocks is relatively more effective in reducing the RT when participants choose not to press space key.However not rewarding the blocks is more effective in reducing the RT in the space condition(higher rate of change). Block has an effect of reducing the RT regardless of any other variables(practice effect), however when blocks are space pressed and not rewarded we get the lowest RT. One would expect the same result with everything same but with rewarded blocks. It might be that the internal motivation in the space pressed subjects are already high enough that while all of the participants in space pressed reward condition starts with lower RT, the rate of change for the non reward in space pressed condition is higher. Same motivation factor cannot be talked about for the None pressed condition and in there we see higher rate of change with the rewarded condition.  </ans>
+
+
+

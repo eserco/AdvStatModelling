@@ -1,0 +1,456 @@
+```{r, echo=FALSE}
+knitr::opts_chunk$set(error = TRUE)
+```
+---
+title: "LAB1a:Assignment1"
+author: "Eser Comak"
+date: "November 13, 2018"
+output: html_document
+---
+
+#Install & Load packages
+```{r}
+library(ggplot2)
+library(plyr)
+library(plotfunctions)
+library(gridExtra)
+library(ggplot2)
+library(itsadug)
+
+```
+##Part I. Inspection of the data
+#Load datafile and get the head&tail
+```{r data}
+
+load("data_for_assignment1_2.rda")
+
+head(datafile, n = 10) # inspect the first 10 elements
+tail(datafile)         # inspect last 6 elements
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+##Question-1
+#Measurements
+```{r}
+# convert these columns to factor (see help(factor) fore more information):
+datafile$city1 <- as.factor(datafile$city1)
+datafile$city2 <- as.factor(datafile$city2)
+# inspect data:
+str(datafile)
+
+is.integer(datafile$rt_vp)
+is.numeric(datafile$rt_vp)
+class(datafile$rt_vp)
+
+is.character(datafile$name_city1)
+is.factor(datafile$name_city1)
+class(datafile$name_city1)
+unique(datafile$name_city1)
+
+is.factor(datafile$city1)
+levels(datafile$city1)
+unique(datafile$city1)
+```
+
+
+##Question-1
+#Conditions
+```{r}
+#howmany U and R cities in city1
+tableUR<-table(datafile$city1)
+grid.table(as.data.frame(tableUR))
+#which cities are presented together
+table(datafile$name_city1,datafile$name_city2)
+#Belfast,Glasgow,Oxford,Poole has the highest variation considering the match between other possible cities
+
+#is.element(x, y) is identical to x %in% y and setdiff and intersect is identical as well
+"Belfast" %in% datafile$name_city1
+is.element("Belfast", datafile$name_city1)
+setdiff(datafile$name_city1,datafile$name_city2)
+intersect(datafile$name_city1,datafile$name_city2)
+```
+
+##Question-3
+#Subjects
+```{r}
+#change column name from Subjekt to Subject
+colnames(datafile)[1] <- "Subject"
+#how many subjects
+length(unique(datafile$Subject))
+#trial per subject
+data.frame(table(datafile$Subject))
+```
+
+##Question-4
+#Order data
+```{r}
+#order data by subject and trial
+datafile <- datafile[order(datafile$Subject,datafile$Trial),]
+```
+
+##Question-5
+#Missing data
+```{r}
+# list rows with missing cases:
+datafile[!complete.cases(datafile),] 
+# exclude missing cases:
+datafile <- na.omit(datafile) 
+```
+
+##Question-6
+#Data manipulation
+```{r}
+#We create pair column with the above code
+datafile$pair <- NA
+datafile[datafile$city1 == "R" & datafile$city2 == "R",]$pair <- 1
+datafile[datafile$city1 == "R" & datafile$city2 == "U",]$pair <- 2
+datafile[datafile$city1 == "U" & datafile$city2 == "U",]$pair <- 3
+datafile[datafile$city1 == "U" & datafile$city2 == "R",]$pair <- 4
+
+#Do it with paste, interaction functions
+datafile$pair2 <- paste(datafile$city1, datafile$city2, sep="")
+# or:
+datafile$pair2 <- interaction(datafile$city1, datafile$city2,sep = "", drop=TRUE)
+```
+
+##Question-7
+#Aggregation
+```{r}
+#concatenate strings in name_city1 and name_city2
+datafile$cityPair <-paste(datafile$name_city1, datafile$name_city2, sep ="")
+
+# subset each unique cityPair values based on pair2 variable levels
+URcities<-tapply(datafile$cityPair, list(datafile$pair2 == "UR"), table)
+UUcities<-tapply(datafile$cityPair, list(datafile$pair2 == "UU"), table)
+RRcities<-tapply(datafile$cityPair, list(datafile$pair2 == "RR"), table)
+RUcities<-tapply(datafile$cityPair, list(datafile$pair2 == "RU"), table)
+
+#return the unique city pair count for each factor
+length(URcities$"TRUE")
+length(UUcities$"TRUE")
+length(RRcities$"TRUE")
+length(RUcities$"TRUE")
+
+#exclude incorrect responses
+datafile_c<-droplevels(datafile[datafile$acc_vp ==1,])
+
+#correct responses per participant
+correct_r <- tapply(datafile_c$acc_vp, list(datafile_c$Subject), length)
+range(correct_r)
+length(correct_r)
+```
+ 
+##Part II: Descriptive statistics
+
+##Question-8
+#Accuracies and Plot
+```{r}
+#Calculate accuracy averages and sds for each levels of pair
+meanAccSd<-ddply(datafile,~pair2,summarise,mean=mean(acc_vp),sd=sd(acc_vp))
+#Plotting
+accPlot<-barplot(meanAccSd$mean, main ="Accuracy",xlab="Condition",ylab="Proportion correct",ylim = c(0,1),names.arg = meanAccSd$pair2,col = "black", density = c(10000,50,40,0) )
+text(accPlot, y = meanAccSd$mean, label = meanAccSd$mean, pos = 3, cex = 0.8, col = "black")
+
+```
+
+Participants in the RU group seems to score the highest amount of accuracy among all groups and Pariticpants from UU group scores the lowest scores.
+
+##Question-9
+#Distribution of reaction times
+```{r}
+#Let's first visualize the distribution of reaction times (data frame datafile_c, only correct reaction times) with a QQ-plot.
+qqnorm(datafile_c$rt_vp)
+qqline(datafile_c$rt_vp)
+
+```
+
+Looking at above graph, we can say that distribution of the values are not normally distributed. Towards the right of the graph there is a upwards tilt which informs us that the participants were giving their decisions with longer and longer reaction times. This makes one tail of a distribution incredibly pronounced which is the right in this case. Note that left tail(lower reaction times) is not a popular trend since it is impossible to under estimate the start of pressing button which is at 0ms, while it is possible to spend a lot of time thinking about the results.
+
+##Question-9 Cont'd
+#Distribution of reaction times
+```{r}
+#Visualize the distribution of log-transformed reaction times per condition with a box plot:
+datafile$logRT <- log(datafile$rt_vp)
+boxplot(logRT ~ pair, data=datafile, col='gray')
+#What can you infer from the box plot? Are the log-transformed reaction times normally distributed?
+#group 1 and 3 have similiar means log transformed RT times while 2 and 4 have similiar means which means UU and RR city pairs cognitively have hair competition compared to UR/RU. Also the third quartlie group is always biggger than second which indicates the problem with the longer reaction times that caused non-normal distribution
+#Calculate the averages per condition for the log-transformed reaction times, and visualize these in a bar plot. (See the earlier accuracy plot for an example.)
+#Calculate reaction time averages and sds for each levels of pair
+meanRTSd<-ddply(datafile,~pair2,summarise,mean=mean(logRT),sd=sd(logRT))
+
+#Plotting
+RTPlot<-barplot(meanRTSd$mean, main ="RT", xlab="Condition", ylab="RT(sec)", ylim = c(0,10), names.arg = meanRTSd$pair2, col = "black", density = c(10000,50,40,0) )
+text(RTPlot, y = meanRTSd$mean, label = meanRTSd$mean, pos = 3, cex = 0.8, col = "black")
+
+```
+Group 1 and 3 have similiar means log transformed RT times while 2 and 4 have similiar means which means UU and RR city pairs cognitively have hair competition compared to UR/RU.
+
+##Question-10
+#Some function example
+```{r}
+#Calculate SE
+
+se <- function(sd, n){
+  result<- se/sqrt(n)
+  return(result)
+}
+
+#Here we illustrate how one could plot the average accuracy per condition with standard errors that show the variation in participants averages:
+
+# participant means:
+subj <- ddply(datafile, c("Subject", "pair2"), summarise,
+              acc_vp = mean(acc_vp))
+# condition means with SE:
+avg <- ddply(datafile, "pair2", summarise,
+             acc = mean(acc_vp),
+             se  = se(acc_vp))
+# barplot:
+b <- barplot(avg$acc, beside = TRUE,
+             col=c(1,1,1,2), density=c(-1,25,25,-1),
+             ylim=c(0,1),
+             main="Accuracy", ylab="Proportion correct", 
+             xlab="Condition")
+errorBars(b, avg$acc, avg$se)
+```
+
+
+
+##Question-11
+#Using ggplot
+```{r}
+#Up to now we have used the core-R package 'graphics' for plotting. However, many use the package 'ggplot2' for visualization, which works rather differently. Here is an example:
+ggplot(datafile, aes(x = rt_vp, y = Trial, colour = pair)) +
+geom_point() +
+facet_wrap( ~ pair2)
+
+```
+
+
+##Question-12
+#Saving
+```{r}
+save(datafile, file = "data_Assignment2.rda")
+# do not forget to set the path if you want to save it not in the current directory
+```
+
+
+###Lab 1b: Linear model
+## Preparations
+
+```{r}
+#rm(list = ls())
+```
+
+##install packages
+```{r}
+load("C:/Users/eserc/Desktop/HMC/second year/Ib/Advanced statistical modelling/LRM/LAB1A/data_Assignment2.rda")
+```
+
+## Data preparation
+#Question 1&2: Aggregation & Inspection data
+```{r}
+datafile_avg <- ddply(datafile, ~Subject + pair, summarise,
+                      meanRT = mean(rt_vp, na.rm=TRUE),  
+                      n.trials = length(rt_vp))
+```
+**How many observations you get overall as a result of manipulations?  **
+
+160 observations = 40 participants * 4 conditions
+
+**How many observations there are per each subject?  **
+
+4
+
+**How many observations you have per condition (recoded in pair)?  **
+
+40 obs for each codition
+
+
+#Question 3: Distributions
+```{r}
+#Make a boxplot of the reaction times, split by condition.
+boxplot(meanRT ~ pair, data=datafile_avg, col='gray')
+```
+**Describe the reaction time distributions for the four conditions. Do you see differences between the conditions?  **
+Yes there are differences. Basically group 1 and 3 && 2 and 4 are similiar 
+
+#Question 4: Transformation
+```{r}
+#Make a histogram of the reaction times. Reaction times are generally not normally distributed. Describe the differences with a normal distribution.
+hist(datafile_avg$meanRT)
+#Reaction times are often transformed using a log-transformation, so that they approximate normally distributed data. Create a new column for log-reaction times, following the command below:
+datafile_avg$logRT <- log(datafile_avg$meanRT)
+#Make a new histogram of the log-transformed reaction times. Did the log transformation work?
+hist(datafile_avg$logRT)
+#yes the transformation seems to work, there is still bit of right skewness though
+```
+The data is right skewed while the normal distribution does not have skewness
+
+#Linear regression
+##Question 5: Hypotheses
+
+Hypothesis testing is like mathematical ''proof by contradiction''; if you want to prove something, then you assume that the opposite is true and using this ''opposite is true'' assumption you try to find a contradiction. As contradictions are impossible, the assumption ''opposite is true'' must be false.
+
+In hypothesis testing you do the same; if you want to show that the intercept (or the slope) is signficantly different from zero, then you assume the opposite, i.e. H0:??0=0 and try to derive a contradiction from this. As in statistics nothing is impossible we will not be able to derive something ''contradictory'' but we will try to show that this leads to something ''very improbable''. **(taken from stackexchange for future reference)**
+
+**Research interest**: Is there an effect of pairing (based on pre-test) on mean reaction times between each experimental group level?
+
+**Null hypothesis**: There is no difference between 4 groups 
+**Alternate hypothesis**: There is a difference between groups
+
+#Question 6: Linear regression model
+
+```{r}
+#Let's setup a linear regression model to investigate our hypotheses. First, we have to make sure that we deal with a factor variable. After creating such variable we will apply lm function that is built in R.
+datafile_avg$pair <- factor(datafile_avg$pair)
+is.factor(datafile_avg$pair)
+#complete the lm model
+lr_model <- lm( meanRT ~ pair , data = datafile_avg)
+```
+
+#Question 7: Interpretation of summary
+
+```{r}
+#Interpreting the results of a linear regression model. One of the first steps after regression analysis is to inspect summary, which presents the estimates of the coefficients and other useful information.
+summary(lr_model)
+```
+
+
+
+**What does the intercept represent?**
+it is the B_o point which is the part of the line that passes through Y axis.
+
+**What does the t-value of the intercept tell?**
+that the intercept is different than zero with very high confidence
+
+**What does the value of pair2 represent?**
+
+it means that pair 2 was lower than pair 1 in terms of reactiontimes by -974(ms)
+
+**Based on the estimated coefficients, calculate the reaction time of pair 2 (R + U).**
+
+2608.92 + (-974.27) = ...
+
+**Based on the estimated coefficients, calculate the reaction time of pair 4 (R + U).**
+
+2608.92 + (-977.49) = ...
+
+**How large is the maximum and average difference between observed values and the predicted ones? (hint- you can look at residuals)?**
+
+max is 4059.9 and average is -202.1
+
+**What information is provided by the R2 statistics?**
+
+it means the model accounts for 0.2467 of the variability in the data so this is not a good model actually
+
+**Based on the summary, what is your conclusion about the effect of the conditions on the reaction times?**
+
+group 2 and 4 have less competition therefore there is less noise to come up with a decision in the system compared to group 1 and 3
+
+#Question 7: Confidence intervals
+
+```{r}
+#Examine the confidence intervals.
+confint(lr_model)
+```
+**What do the confidence intervals suggest about the differences between the conditions?  **
+
+pair3 has the highest range when it comes to range of reaction time values that the participant can score. then comes pair2 and pair4 with very similiar ranges and then finally pair1 has the lowest range.
+
+#Question 8: Model predictions
+
+```{r}
+#Visualizing the model predictions.
+newd <- data.frame(pair=as.factor(1:4),
+                   labels=c("RR", "RU", "UU", "UR"))
+fv <- predict(lr_model, newd, se.fit=TRUE)
+
+b <- barplot(fv$fit, beside = TRUE,
+        ylab="model estimates",
+        ylim=c(6,4000), xpd=FALSE)
+errorBars(b, fv$fit, fv$se.fit)
+```
+
+**What is represented by the fitted values that are returned by the function predict?  **
+
+predicted mean reaction times for each condition
+
+**Do the visualizations of the model predictions match your earlier conclusions based on the summary?  **
+
+yes the meanRT values for the pairs match closely to this current barplot
+
+#Question 9: Model comparisons
+
+```{r}
+#Based on the model predictions that were visualized in question 8, we came up with an alternative explanation: if the cities are equally well-known, it takes more time to decide than when one of them is well-known, and the other not. We create a new predictor that captures these two categories and run a new linear regression model.
+
+datafile_avg$Condition <- ifelse(datafile_avg$pair == 1 | datafile_avg$pair == 3 , 1, 2)
+#turn into factors
+datafile_avg$Condition <- factor(datafile_avg$Condition)
+is.factor(datafile_avg$Condition)
+
+#Below we compare what model fits the data best: a model with all four conditions, or a model with only labeled whether the two cities are equally well-known. Run the code.https://stats.stackexchange.com/questions/172157/how-to-interpret-an-anova-table-comparing-full-vs-reduced-ols-models
+
+lr_model1 <- lm(logRT ~ pair, data=datafile_avg)
+lr_model5 <- lm(logRT ~ Condition, data=datafile_avg)
+anova(lr_model1, lr_model5)
+
+#visualize lr_model1
+fv <- predict(lr_model1, newd, se.fit=TRUE)
+
+b <- barplot(fv$fit, beside = TRUE,
+        ylab="model estimates",
+        ylim=c(6,10), xpd=FALSE)
+errorBars(b, fv$fit, fv$se.fit)
+
+#visualize lr_model2
+
+newdd <- data.frame(Condition=as.factor(1:2),
+                   labels=c("SAME", "DIFFERENT"))
+
+fvv <- predict(lr_model5, newdd, se.fit=TRUE)
+
+b <- barplot(fvv$fit, beside = TRUE,
+        ylab="model estimates",
+        ylim=c(6,10), xpd=FALSE)
+errorBars(b, fvv$fit, fvv$se.fit)
+```
+
+**Interpret the output of the model comparison. Which model would you prefer?  **
+
+I would choose first model because it has lower RSS
+
+**Visualize the model predictions as illustrated in Question 8 for the model lr_model1 and lr_model2. Do these models fit the same patterns?  **
+
+Yes they fit the same patterns
+
+#Question 10: Checking residuals
+
+```{r}
+#We visualize the residuals to see whether the residuals are normally distributed (one of the assumptions of linear regression).
+#QQ-plot of the residuals:
+
+qqnorm(resid(lr_model))
+qqline(resid(lr_model))
+
+```
+
+**Describe the plot. What do we see on the x-axis and y-axis?  **
+
+y- quantiles with reaction times in ms, x - standard deviations
+
+**What do you conclude: Are the residuals normally distributed?  **
+
+NO THEY are not
+
+
