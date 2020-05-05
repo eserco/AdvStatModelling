@@ -1,0 +1,303 @@
+---
+title: "Assignment 3 Advanced Statistical Modeling"
+date: "Eser Comak<br/>"
+author: "s3432548"
+output: 
+  html_document:
+    theme: "united"
+    highlight: "pygments"
+editor_options: 
+  chunk_output_type: console
+---
+<style>
+h1 {color: #ff6600}
+h2,h3 { margin-top: 100px; }
+p, h4 { margin-top: 30px; margin-bottom: 30px; }
+quest {
+    background: #CCFFFF;
+    margin: 20pt 0pt;
+}
+.center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: 250pt;
+}
+pre { 
+  margin-left: 50px;
+  margin-right: 50px;
+}
+pre.r { 
+  margin-left: 50px;
+  margin-right: 50px;
+}
+ans {
+    background: #CCFFFF;
+    margin: 20pt 0pt;
+}
+</style>
+
+<p><br/></p>
+
+## Preparations
+- Download the data and load it in R:
+
+```{r}
+# clean R working environment:
+rm(list=ls())
+
+# Load data:
+load("DykesRivers.rda")
+
+# Load packages:
+library(plyr)
+library(plotfunctions)
+library(mgcv)
+library(itsadug)
+
+# inspect data:
+head(dat)
+str(dat)
+```
+
+## PART I: Descriptive statistics
+
+```{r}
+table(dat$subj, dat$cond)
+```
+is Condition (cond) a within-subjects predictor or a between-subjects predictor?
+
+<ans>It is between subjects predictor. Each participant participated in one level of the experiment </ans>
+
+The duration of the short interval did not change:
+```{r}
+table(dat$dur2)
+```
+
+The plot below show how the duration of the long interval changes with the conditions (you may also want to look at the plots in the paper).
+
+```{r}
+table(dat$dur3)
+
+# data frame with durations of the long interval to reproduce 
+# for each trial (seq) and condition (cond):
+conditions <- dat[,c("seq3", "dur3", "cond")]
+# remove duplicate rows:
+conditions <- conditions[!duplicated(conditions),]
+head(conditions)
+# data frame with block lengths:
+blocks <- tapply(dat$rt3, list(dat$block, dat$subj), length)
+blocks
+# get the row means (we could have also taken just one column):
+blocks <- rowMeans(blocks, na.rm = TRUE)
+
+### PLOTS: ######################################
+
+# split plot window in three panels:
+par(mfrow=c(1,3), cex=1.1)
+
+## PLOT 1:
+# setup empty plot:
+plot(c(), c(), 
+     xlim=c(1,max(dat$seq3)), ylim=range(dat$dur3),
+     main="Condition FF", xlab="Trial (seq)", ylab="Interval duration",
+     bty='n')
+# add line for FF:
+with(conditions[conditions$cond=="FF",], lines(seq3, dur3, lwd=2))
+# add block numbers (blocks need to get multiplied with 2, because 
+# participants need to reproduce the short and the long interval):
+abline(v=cumsum(blocks*2), lty=3)
+# add block numbers:
+# note that xpd=TRUE allows for putting info outside plot region
+text(cumsum(blocks*2), rep(3700, length(blocks)), labels=names(blocks), adj=1, xpd=TRUE)
+
+## PLOT 2:
+plot(c(), c(), 
+     xlim=c(1,max(dat$seq3)), ylim=range(dat$dur3),
+     main="Condition DR", xlab="Trial (seq)", ylab="Interval duration",
+     bty='n')
+with(conditions[conditions$cond=="DR",], lines(seq3, dur3, lwd=2))
+abline(v=cumsum(blocks*2), lty=3)
+text(cumsum(blocks*2), rep(3700, length(blocks)), labels=names(blocks), adj=1, xpd=TRUE)
+
+## PLOT 3:
+plot(c(), c(), 
+     xlim=c(1,max(dat$seq3)), ylim=range(dat$dur3),
+     main="Condition RD", xlab="Trial (seq)", ylab="Interval duration",
+     bty='n')
+with(conditions[conditions$cond=="RD",], lines(seq3, dur3, lwd=2))
+abline(v=cumsum(blocks*2), lty=3)
+text(cumsum(blocks*2), rep(3700, length(blocks)), labels=names(blocks), adj=1, xpd=TRUE)
+```
+
+The columns rt2 and rt3 show the estimated durations for the short and long intervals. Below example code is provided for the reaction times per condition and the SE of the means.
+```{r}
+avg <- ddply(dat, c("seq2", "cond", "subj"), summarise,
+              RTshort = mean(rt2, na.rm=TRUE),
+              RTlong  = mean(rt3, na.rm=TRUE))
+# by adding 0.5 to seq2, we take the average between seq2 and seq3
+# as a representation of the trial number. Recall that short and long 
+# intervals were alternating.
+avg$Trial <- avg$seq2 + 0.5
+
+avg <- ddply(avg, c("Trial", "cond"), summarise,
+              m.RTshort = mean(RTshort, na.rm=TRUE),
+              s.RTshort = se(RTshort, na.rm=TRUE),
+              m.RTlong = mean(RTlong, na.rm=TRUE),
+              s.RTlong = se(RTlong, na.rm=TRUE))
+head(avg)
+```
+
+Here is an example plot of the data using R's basic plot functions. (If you prefer to use ggplot or lattice for plotting, it might be a useful exercise for the exam to try to produce a similar graph with these packages.)
+
+```{r}
+# create three panels:
+par(mfrow=c(1,3), cex=1.1)
+
+# PLOT 1:
+# setup empty plot window with large enough axes:
+plot(c(), c(), xlim=range(avg$Trial), ylim=c(1800, 3600),
+     main="Condition FF", xlab="Trial", ylab="RT (ms)", 
+     bty='n')
+# run the next series of commands on the averages of condition FF:
+# (note that the {} allow for multiple commands in the 'with' statement)
+with(avg[avg$cond=="FF",], { 
+  lines(Trial, m.RTshort)
+  lines(Trial, m.RTlong, col=2)
+})
+# run the next series of commands on the presented durations of condition FF:
+with(conditions[conditions$cond=="FF",],{
+  lines(seq3, dur3, col=2, lty=2)
+  lines(seq3, rep(2000,length(seq3)), col=1, lty=2)
+})
+
+# PLOT 2: 
+plot(c(), c(), xlim=range(avg$Trial), ylim=c(1800, 3600),
+     main="Condition DR", xlab="Trial", ylab="RT (ms)", 
+     bty='n')
+with(avg[avg$cond=="DR",], {
+  lines(Trial, m.RTshort)
+  lines(Trial, m.RTlong, col=2)
+})
+with(conditions[conditions$cond=="DR",], {
+  lines(seq3, dur3, col=2, lty=2)
+  lines(seq3, rep(2000,length(seq3)), col=1, lty=2)
+})
+
+# PLOT 3:
+plot(c(), c(), xlim=range(avg$Trial), ylim=c(1800, 3600),
+     main="Condition RD", xlab="Trial", ylab="RT (ms)", 
+     bty='n')
+with(avg[avg$cond=="RD",], {
+  lines(Trial, m.RTshort)
+  lines(Trial, m.RTlong, col=2)
+})
+with(conditions[conditions$cond=="RD",], {
+  lines(seq3, dur3, col=2, lty=2)
+  lines(seq3, rep(2000,length(seq3)), col=1, lty=2)
+})
+```
+
+
+## PART II: Analysis
+
+The question we would like to answer in this assignment is whether participant's estimation of the short interval is influenced by the (changing) duration of the long interval. The column `rt2` contains the participants' estimations of the short interval. Note that the short interval was kept constant at 2 seconds in all conditions.
+
+
+#### Question 1: Data [4pt]
+
+- Inspect the reaction times. Include the code and your answers to the following questions:
+
+    - Describe the range of the reaction times
+    ```{r}
+range(dat$rt2)
+```
+    <ans> it is between 169ms to 5775ms</ans>
+    
+    - Describe the distribution of the reaction times
+    ```{r}
+hist(dat$rt2)
+```
+    - Check for outliers. If you find outliers, describe why and how you removed these. If you do not find outliers, explain how you did conclude that there were no outliers to remove.
+    ```{r}
+dat<-subset(dat, rt2 >= 1250 & rt2 <= 4250)
+hist(dat$rt2)
+```
+<br>
+<ans>In the provided paper, 12 subjects were removed from the pool because more than 3% of their responses were shorter than 1.25 s or longer than 4.25 s. Therefore following the same procedure in the paper, we opted to remove responses shorter than 1.25ms and longer than 4.25ms</ans>
+
+- Decide whether you need to transform the data (describe why / why not) and which transformation would be best (and why). Include your code and your answers.
+
+    - If you decided to transform the data, include the code for the actual transformation of the data.
+
+<ans> GAM models do not have to have perfect normal distribution unless there are big outliers(which we removed). We dont have to transform in this current state/ans>
+
+#### Question 2: GAMM [6pt]
+
+- Setup a GAMM model that includes the interaction between `cond` and `seq2` (which marks the trial). 
+
+- Also include a random effect(s) for participants (`subj`). And answer the following questions:
+
+    - List all the possible random effects for `subj` (code and short description of the random effect), with only considering `cond` and `seq2` as other predictors that are available in the data. Hint: First, think about which different types of random effects are available in GAMMs.
+```{r}
+#Listing all possible random effects for subj with only considering cond and seq2
+#s(subj, bs ="re") - random intercept for subj
+#s(subj, cond, bs = "re") - by speaker random slope for each condition
+#s(subj, seq2, bs = "re") -by speaker random slope for each trial
+#s(seq2, subj, bs = "fs", m = 1) - random factor smooth for each subj considering the non-linear variability of each subj's performance over trials
+#s(seq2, subj, by = cond, bs = "fs", m = 1) - random factor smooth for each subj considering the non-linear variability of each subj's performance over trials. This is furthermore applied to each condition (FF,DR,RD) with "by= cond" parameter
+```    
+    
+    - Explain why you prefer the random effect(s) your selected to include. Hint: You do not need to do modelcomparisons to determine whicn random effects structure you prefer.
+
+
+Run the model and include the code and summary in your report.
+
+```{r}
+#get feedback information for rt2 to test paper's findings
+dat$errE2<-as.character(dat$errE2)
+dat$errL2<-as.character(dat$errL2)
+dat$rt2fb<- NA
+dat$rt2fb[which(dat$errE2 == "FALSE" & dat$errL2 == "TRUE")]<- "LONG"
+dat$rt2fb[which(dat$errE2 == "TRUE" & dat$errL2 == "FALSE")]<- "SHORT"
+dat$rt2fb[which(dat$errE2 == "FALSE" & dat$errL2 == "FALSE")]<- "CORRECT"
+dat$rt2fb<-as.factor(dat$rt2fb)
+
+#model built by the specifications provided in the assignment
+m1<- bam(rt2 ~ cond + s(seq2, by=cond) + s(seq2,subj,by=cond,bs="fs",m=1),data=dat)
+summary(m1)
+
+#Below are the models that are built on the guidance of the findings provided in the paper
+m2 <- bam(rt2 ~ cond+ s(seq2, by=cond) + s(seq2,subj, by= rt2fb, bs="fs" , m = 1),data=dat)
+summary(m2)
+```
+<ans>Here we first built the model according the configuration provided in the question. To account for the variability and dependency among measurements, we chose to include random factor smooth for subj to capture non-linear rt2 production trend over trials. Furthermore we assumed the trend might be different for each condition. Thus we additionally included "by = cond" parameter into our random factor smooth. Instead of adding random intercept and slope for subj separetely, we believed all the variability can be simply captured by random factor smooths </ans>
+
+<ans>Additionally, following the findings in result section of the original paper, we produced variable called rt2fb. Based on the feedback given to participant after each short interval time guessing action, rt2fb was coded with three levels. These are "Correct", "LONG" "SHORT" symbolizing correct, too long press, too short press respectively. Later, we built our model considering the non linear trend that each subject produced along the trials based on the feedback given by the experimental setup(rt2fb). To account for this variability we included random factor smooths for each subject. Compared to m1, as a grouping variable, we included rt2fb variable instead of cond variable and.</ans> 
+
+- Plot the fitted / summed effects with the function `plot_smooth`. Use the function `plot_diff` to plot the differences between the conditions FF and DR and between FF and RD. 
+
+    - What do you conclude about the differences between the conditions? 
+
+```{r}
+plot_smooth(m1, view = "seq2" , plot_all= "cond", rm.ranef=TRUE)
+plot_diff(m1, view= "seq2" , comp=list(cond=c("FF","DR")), rm.ranef=TRUE)
+plot_diff(m1, view= "seq2" ,comp=list(cond=c("FF","RD")), rm.ranef=TRUE)
+```
+<ans> Plot_smooth shows that the confidence intervals are extremely wide and conditions overlap in many places. The each summed effects(FF , RD , DR) are placed on the y axis as the combination of height adjusment over the intercept in regards to its specific condition. To see if there is difference between these conditions, we look at the plot_diff plots. There we see between FF and DR condition, the difference occurs between 192nd and 295th trials. Furthermore, betweenFF and RD condition, the difference occurs between 67th and 147th trials.</ans> 
+
+
+- Visualize the residuals and check the assumptions of the model. Describe your conclusions (does the model violates the assumptions) and include the code and plots in your report.
+
+```{r}
+#inspect possible autocorrelation between residuals
+acf_resid(m1)
+#inspect normality of residuals, structure of residuals of fitted effects and homegeneity of variance
+qqnorm(resid(m1))
+qqline(resid(m1))
+plot(fitted(m1), resid(m1))
+```
+<br>
+<ans>There is no autocorrelation between residuals</ans>
+
+<ans> The residuals deviate from normal distribution by a medium margin in the qqplot.In fitted vs resid plot, the residuals' mean seem to be little more than zero.The residual values do not seem to be distributed evenly for diffent fitted values. First The range of residuals are pretty high(-1500 to 1600). Second, there are abundance of residuals for the lower predicted values but it becomes highly sparse for the higher values(no homogeneity). This might reflect dependency that our model coudlnt have addressed.The state of non-normally distributed residuals can be problem that might affect estimates and p values. We might have to adress this problem by adding more variables to our model. The current model violates the assumptions</ans>

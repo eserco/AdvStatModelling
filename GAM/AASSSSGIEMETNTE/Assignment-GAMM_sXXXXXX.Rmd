@@ -1,0 +1,149 @@
+---
+title: "Assignment 3 Advanced Statistical Modeling"
+date: "Jacolien van Rij<br/>Deadline: January 18, 2018"
+author: "s3432548"
+output: 
+  html_document:
+    theme: "united"
+    highlight: "pygments"
+editor_options: 
+  chunk_output_type: console
+---
+<style>
+h1 {color: #ff6600}
+h2,h3 { margin-top: 100px; }
+p, h4 { margin-top: 30px; margin-bottom: 30px; }
+quest {
+    background: #CCFFFF;
+    margin: 20pt 0pt;
+}
+.center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: 250pt;
+}
+pre { 
+  margin-left: 50px;
+  margin-right: 50px;
+}
+pre.r { 
+  margin-left: 50px;
+  margin-right: 50px;
+}
+</style>
+
+<p><br/></p>
+
+<span style="background-color:yellow;font-weight:bold;">In contrast to the first two assignments, this assignment is optional. Conditions: </span> 
+
+- As the deadline is in the exam-preparation week, you can chose to skip this assignment. In the case you skip the assignment, the exam counts for 90% of the grade, and only the first two assignments count.
+- In case you hand-in the assignment within the deadline, it will count for 5% of the grade and the exam will count for 85% of the grade. You cannot withdraw the assignment after submission.
+- The first two assignments are not optional, and count each for 5% of the grade (10% together). Not handing in the assignment resulted in a grade of 0. 
+- Note that for the resit, you cannot (re-)do assignments.
+
+
+## Preparations
+
+- Download the answer template (R Markdown) from Nestor and use that for creating your report. More information on R Markdown can be found [here](http://jacolienvanrij.com/Tutorials/tutorialMarkdown.html).
+
+- Other directions for the R Markdown report:
+    
+    - Always include the code when you calculated or plotted information.
+    - Do not include very long output - use `head` and similar functions to cut-off the output.
+    - Use the html mark up `<ans>` for providing your answer to questions. 
+    - When the output, plots and/or code are not visible, please set the arguments `eval` and `include` of the R code chunks to TRUE as illustrated below: 
+
+<img src="Screenshot 2018-12-13 at 17.07.10.png" class="center">
+
+
+- Download the data and load it in R:
+
+```{r, eval=FALSE}
+# clean R working environment:
+rm(list=ls())
+
+# set working directory:
+setwd("/Users/jacolien/Documents/Courses/AdvancedStatsModeling/Topic 3 GAMM/assignment/")
+
+# Load data:
+load("DykesRivers.rda")
+
+# Load packages:
+library(plyr)
+library(plotfunctions)
+library(mgcv)
+library(itsadug)
+
+# inspect data:
+head(dat)
+str(dat)
+```
+
+
+#### The data
+
+The data for the assignment is from a time estimation experiment of Taatgen & van Rijn (2011)^[Niels Taatgen & Hedderik van Rijn (2011): Traces of times past: Representations of temporal intervals in memory. *Memory & Cognition 39*, pp: 1546-1560.]. The abstract of the paper:
+
+<div style="font-family:serif; font-size:0.9em; margin:0px 50px; padding: 0px; background-color:#efefef">
+Theories of time perception typically assume that some sort of memory represents time intervals. This memory component is typically underdeveloped in theories of time perception. Following earlier work that suggested that representations of different time intervals contaminate each other (Grondin, 2005; Jazayeri & Shadlen, 2010; Jones & Wearden, 2004), an experiment was conducted in which subjects had to alternate in reproducing two intervals. In two conditions of the experiment, the duration of one of the intervals changed over the experiment, forcing subjects to adjust their representation of that interval, while keeping the other constant. The results show that the adjustment of one interval carried over to the other interval, indicating that subjects were not able to completely separate the two representations. We propose a temporal reference memory that is based on existing memory models (Anderson, 1990). Our model assumes that the representation of an interval is based on a pool of recent experiences. In a series of simulations, we show that our pool model fits the data, while two alternative models that have previously been proposed do not.
+</div>
+
+The descriptive statistics is provided in the next section. Please read this carefully and run the provided code, as it gives you important information about the experimental design and the columns in the data.
+
+
+## PART I: Descriptive statistics
+
+<span style="background-color:yellow;font-weight:bold;">You do not need to hand in the answer to the questions *in the descriptive statistics section*. The questions are meant for yourself to check if you understand. (If you do not know the answer, feel free to ask during lab sessions.)</span>
+
+<hr/>
+
+## PART II: Analysis
+
+The question we would like to answer in this assignment is whether participant's estimation of the short interval is influenced by the (changing) duration of the long interval. The column `rt2` contains the participants' estimations of the short interval. Note that the short interval was kept constant at 2 seconds in all conditions.
+
+
+#### Question 1: Data [4pt]
+
+- Inspect the reaction times. Include the code and your answers to the following questions:
+
+    - Describe the range of the reaction times
+    - Describe the distribution of the reaction times
+    - Check for outliers. If you find outliers, describe why and how you removed these. If you do not find outliers, explain how you did conclude that there were no outliers to remove.
+
+- Decide whether you need to transform the data (describe why / why not) and which transformation would be best (and why). Include your code and your answers.
+
+    - If you decided to transform the data, include the code for the actual transformation of the data.
+
+
+#### Question 2: GAMM [6pt]
+
+- Setup a GAMM model that includes the interaction between `cond` and `seq2` (which marks the trial). 
+
+- Also include a random effect(s) for participants (`subj`). And answer the following questions:
+
+    - List all the possible random effects for `subj` (code and short description of the random effect), with only considering `cond` and `seq2` as other predictors that are available in the data. Hint: First, think about which different types of random effects are available in GAMMs.
+    - Explain why you prefer the random effect(s) your selected to include. Hint: You do not need to do modelcomparisons to determine whicn random effects structure you prefer.
+
+
+Run the model and include the code and summary in your report.
+
+```{r, eval=FALSE}
+m1 <- bam( ... , data=dat)
+summary(m1)
+```
+
+
+- Plot the fitted / summed effects with the function `plot_smooth`. Use the function `plot_diff` to plot the differences between the conditions FF and DR and between FF and RD. 
+
+    - What do you conclude about the differences between the conditions? 
+
+```{r, eval=FALSE}
+plot_smooth(m1, view = ... , plot_all= ..., rm.ranef=TRUE)
+plot_diff(m1, view= ... , comp=list(...), rm.ranef=TRUE)
+plot_diff(m1, view= ... , comp=list(...), rm.ranef=TRUE)
+```
+
+- Visualize the residuals and check the assumptions of the model. Describe your conclusions (does the model violates the assumptions) and include the code and plots in your report.
+
+
