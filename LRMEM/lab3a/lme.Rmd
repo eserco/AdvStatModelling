@@ -1,0 +1,339 @@
+---
+title: "Lab3a Random effects"
+author: "Eser Comak"
+date: "November 27, 2018"
+output: html_document
+---
+Questions to ask:
+why the wiggly effect
+Do we assume random effects are fixed when we interpret intercept of fixed effect.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Preperations
+
+```{r}
+#clear work space
+rm(list = ls())
+
+#load packages
+library(plyr,lme4)
+
+#load data
+datafile <- read.table("behavioral-data.txt", header=TRUE, sep="\ ", stringsAsFactors=FALSE)
+# always immediately check whether the data looks as expected:
+head(datafile)
+attach(datafile)
+
+```
+
+#Part I. Descriptive Statistics
+
+```{r}
+
+# Check the size of the data
+dim(datafile) 
+nrow(datafile)
+ncol(datafile)
+
+# List the column names:
+names(datafile)
+# which is for data.frames (but not for vectors) the same as:
+colnames(datafile)
+# .. and not very informative here:
+# rownames(datafile)
+
+# List the structure of the data
+str(datafile)
+summary(datafile)
+
+# Print the first and the last 3 rows in the data
+head(datafile, 3)
+tail(datafile, 3)
+
+#participant no
+length(unique(datafile$Subject))
+
+#how mny trials each participant saw
+table(datafile$Subject,datafile$Trial)
+```
+
+**What are the dimensions of the data?  **
+ 20800 rows and 27 columns
+**Which columns describe the design of the experiment?  **
+blocks block and trial columns. The design of the experiment is within subject
+**How many subjects participated in the current experiment? Hint: you could use the functions unique and  length as alternative for table.  **
+20
+**How many trials did each participant see, and how long many trials were in each block?  **
+trials 80*13 = 1040 and the amount of trials in each block was 80
+
+#Queston 2: Data manipulation - removing outliers
+
+```{r}
+#Inspect range of values that reaction times can take using the functions range or summary.
+range(datafile$Probe.RT)
+
+#Visualize the reaction time values with a boxplot.
+boxplot(datafile$Probe.RT, data=datafile, col='gray')
+
+#remove RTs lower than 50ms
+datafile <- droplevels(datafile[datafile$Probe.RT > 50,])
+```
+
+**After excluding the outliers, how many observations are left in the data?  **
+
+20798 obs
+
+**Why it is important to remove extreme values? How can these influence our statistical analysis?  **
+
+if we dont remove, our models predictive power will be reduced because the model that tries to explain outliers will be misleading.
+
+#Queston 3: Removing incorrect responses
+
+```{r}
+# list the number of responses for each subject
+table(Subject,acc)
+# calculate the number of correct responses per participant
+check <- tapply(acc, list(Subject), sum)
+# inspect:
+range(check)
+#remove incorrect responses
+datafile <- droplevels(datafile[acc == 1,])
+```
+
+#Question 4: Visualization
+
+```{r}
+#Visualize the distribution of reaction times using a QQ-plot (functions qqnorm and qqline, as illustrated in previous assignments).
+
+qqnorm(datafile$Probe.RT)
+qqline(datafile$Probe.RT)
+```
+
+**What can you infer from QQ-plot? Are the reaction times normally distributed?  **
+
+No they are not. it is positive skewed
+
+**Do we need to apply any transformation(log,inverse)?  **
+we should try both of them and compare results
+
+```{r}
+datafile$logRT <- log(datafile$Probe.RT)
+datafile$inverseRT <- -1000/datafile$Probe.RT
+
+par(mfrow=c(1,2)) # it will allow you to combine two graphs in one
+qqnorm(datafile$logRT, main = "Q-Q Plot of Log RT", ylim=c(5,10))
+qqline(datafile$logRT)
+qqnorm(datafile$inverseRT, main = "Q-Q Plot of Inverse RT", ylim=c(-3,3))
+qqline(datafile$inverseRT)
+```
+
+**Which transformation approximates the normal distribution most?  **
+Inverse transformation approximates the normal dist most
+
+#Question 5: Analyzing differences between groups
+
+**As is explained in the description of the experiment, participants were presented with stimuli of three different types: 1) new foils, 2) repaired foils and 3) targets. To observe differences in RTs between three groups we will use boxplot.  **
+
+```{r}
+boxplot(Probe.RT ~ PairType, data = datafile, xlab = "Type of pair", ylab = "RT")
+```
+
+**What is your conclusion: Are there any salient differences between reaction times of any group?  **
+
+RP foil condition takes the most time to react then comes target and then new foil. The hardest condition is RPFoil and easiest is NewFoil.
+
+
+##Part II. Modeling
+
+```{r}
+#exclude the target pairs from the current analysis..
+
+datafile2 <- droplevels(datafile[datafile$PairType != "Target", ])
+```
+
+#Question 6: Linear model
+```{r}
+#The column cooc lists the number of co-occurrences of each pair of words in a corpus of 103 children’s books. Construct a model that includes the main effects of cooc and PairType on the dependent variable (inverseRT). Note that we now will use datafile2.
+
+# order data:
+datafile2 <- datafile2[order(datafile2$Subject, datafile2$Trial),]
+
+# create factors:
+datafile2$PairType <- as.factor(datafile2$PairType)
+
+# setup model:
+m1 <- lm(inverseRT~cooc+PairType , data = datafile2)
+
+#inspect summary
+summary(m1)
+
+#inspect residuals with qqplot
+qqnorm(resid(m1))
+qqline(resid(m1))
+```
+
+**Inspect summary of the model. What does the intercept represent here?  **
+the mean inverseRT value when co-ocurrences are 0 and PairType is NewFoil
+**Inspect the residuals. Are the residuals normally distributed?  **
+residuals are almost normally distributed
+
+```{r}
+#Run the following code, which plots the ordered residuals.
+
+plot(resid(m1), bty='n', main="Residuals", xlab="Rank", ylab="Residuals")
+abline(h=0, col="gray")
+```
+
+**What is causing the wiggly pattern?  **
+some variables that is not included in the linear model m1 is causing outlier performance of some subjects not to be captured by the model. we need to us lmer model to include random effects
+**Why would linear mixed-effects models be more appropriate for modeling this data?  **
+Yes because it would help explain the residuals that are outliers
+
+#Question 7: Linear mixed effects model
+```{r}
+#Before we start with the linear mixed-effects models, we need to think about the structure and clustering in the data.
+
+names(datafile2)
+```
+
+**Which of the columns in the data should be modeled as fixed effects and which which predictors as random effects?  **
+it depends on what we think we control in our experiment. The random variables are the variables that we dont control or did not introduce to the experiment intentionally but they still modulate the depending variable.
+
+```{r}
+#We start with the same main effects model as defined in Question 6, but we add random intercepts for Subject and Item. We will use the column Pair to estimate item effects. Make sure that we deal with factors.
+
+datafile2$Subject <- as.factor(datafile2$Subject)
+datafile2$Pair <- as.factor(datafile2$Pair)
+
+#Setup a linear mixed-effects model that includes main effects for cooc and PairType, and random intercepts for Subjects and Items to control for by-subject and by-item variability. Note that a dependent variable is still inverseRT. Inspect the summary of the model.
+
+ml2 <- lmer(inverseRT ~coocc+PairType +(1|Subject) + (1|Pair), data = datafile2)
+summary(ml2)
+```
+
+**What is represented by the intercept?  **
+
+the mean inverseRT value when cooc is 0 and PairType is New foil.
+
+**What is now represented by the estimate cooc?  **
+
+that 1 co-occurance freq increases the intercept value by 0.0006484 for both conditions
+
+**Compare the results with the results from the linear model. Did the estimates change? Explain why (not).  **
+
+they were changed in m2 because we included random effects
+
+
+```{r}
+#Run again the same code for visualizing the ordered residuals.
+
+plot(resid(ml2), bty='n', main="Residuals", xlab="Rank", ylab="Residuals")
+abline(h=0, col="gray")
+```
+
+**Did the residuals change? How?  **
+Yes the wiggly effect is no longer there
+
+```{r}
+#Visualize the random effects with the code provided below:
+
+re <- ranef(ml2)
+
+qqnorm(re$Pair[,1], main="Items")
+qqline(re$Pair[,1])
+
+qqnorm(re$Subject[,1], main="Subjects")
+qqline(re$Subject[,1])
+```
+
+**What do the dots in the plots represent?  **
+They represent number subjects in the subject graph and number of  items in the item graph
+
+**Which of the two random effects shows the largest amount of variation? Compare this with the variance reported in the summary.  **
+Pair shows the largest amount of variance
+
+
+
+#Question 8: Random slopes
+In addition to random intercepts, LME can also include random slopes.
+```{r}
+#Setup a new model that includes main effects for the predictors cooc and PairType (as in model  ml2). In addition, include random intercepts for subjects and items, and a (separate) random slope for  cooc by subject.
+
+ml3 <- lmer(..., data = datafile2)
+summary(ml3)
+
+```
+
+**What is represented by the random slope for cooc by subject?  **
+
+**Why is it not a good idea to include a random slope of cooc by item?  **
+
+**Inspect the summary. Is the estimated variance in the slope larger or smaller than the estimated variances for the random intercepts?  **
+
+**Compare the models ml2 and ml3 using the function anova. Which model is preferred? And what tells this about including the slope in the model?  **
+
+
+```{r}
+#Inspect the subject-random effects by plotting the random intercepts against the random slopes
+
+re <- ranef(ml3)$Subject
+
+plot(re[,'(Intercept)'], re[,'cooc'], 
+     xlab="Random intercept estimates", ylab="Random slope estimates")
+abline(h=0, v=0, lty=3)
+
+```
+
+**Based on this plot, do you think there is a correlation between the random intercept estimates and the random slopes?  **
+
+
+
+```{r}
+#To test whether this is the case, we could setup a new model ml4 that allows the intercept and slope to be correlated. Use the same fixed-effect structure as the previous models (only including main effects), but additionally include a term that combines the random intercept and a slope for cooc by subjects, and include a random intercept for items.
+
+ml4 <- lmer(..., data = datafile2)
+summary(ml4)
+anova(ml3, ml4)
+
+```
+
+**Inspect the summary and the model comparison test with anova. What is the difference between models ml3 and ml4?  **
+
+#Question 9: More random slopes
+Instead of a random slope for cooc by subject, we would like to include a by-subject random slope for  PairType. Setup the model by replacing the dots ‘…’ by the correct model formula, which includes random intercepts for subjects and items, and a random slope for cooc by subject.
+```{r}
+
+ml5 <- lmer(..., data = datafile2)
+summary(ml5)
+
+```
+
+**How can we interpret a slope of PairType? What is it doing?  **
+
+**Inspect the summary, especially the random effects. What is surprising about the slope for  PairType by Subject?  **
+
+```{r}
+#Now setup a similar model, but now replace the two separate random effects terms for Subjects by a single random effects term, that combines the random intercept and the random slope.
+ml6 <- lmer(..., data = datafile2)
+summary(ml6)
+
+```
+
+**Inspect the summary, especially the random effects. What is the difference with the previous model ml5?  **
+
+```{r}
+#Now compare the two models, ml5 and ml6 using anova, and also the earlier two models with a random slope for cooc instead of PairType.
+
+anova(ml3, ml4)
+anova(ml5, ml6)
+
+```
+
+**Comparing the PairType-models first. Which model is more complex?  **
+
+**Comparing the cooc-models. Which model is more complex?  **
+
+**What is your conclusion about combining slopes and intercepts in a single model term?  **

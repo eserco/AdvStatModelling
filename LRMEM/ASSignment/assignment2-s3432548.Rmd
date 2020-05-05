@@ -1,0 +1,393 @@
+---
+title: "Assignment 2 Advanced Statistical Modeling"
+author: "s3432548"
+output: 
+  html_document:
+    theme: "united"
+    highlight: "pygments"
+editor_options: q8qqsssssssss
+  chunk_output_type: console
+---
+<style>
+h1 {color: #ff6600}
+h2,h3 { margin-top: 100px; }
+p, h4 { margin-top: 30px; margin-bottom: 30px; }
+quest {
+    background: #CCFFFF;
+    margin: 20pt 0pt;
+}
+.center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: 250pt;
+}
+ans {
+    background: #CCFFFF;
+    margin: 20pt 0pt;
+}
+</style>
+
+<p><br/></p>
+
+```{r results = 'hide', warning=FALSE}
+# clean R working environment:
+rm(list=ls())
+
+#install this package to see final three way interaction plot
+#options(repos=structure(c(CRAN="http://cran.r-project.org")))
+#options(repos="https://cran.rstudio.com" )
+#install.packages("sjPlot",repos = "https://cran.rstudio.com")
+
+#install this package for unscaling
+#install.packages("DMwR")
+
+
+# set working directory:
+setwd("/Users/eserc/Desktop/HMC/second year/Ib/Advanced statistical modelling/LRMEM/ASSignment")
+
+# Load data:
+load("data_vanRij_2013.rda")
+
+# Load packages:
+library(DMwR,warn.conflicts=F, quietly=T)
+library(sjPlot,warn.conflicts=F, quietly=T)
+library(plyr,warn.conflicts=F, quietly=T)
+library(plotfunctions,warn.conflicts=F, quietly=T)
+library(ggplot2,warn.conflicts=F, quietly=T)
+library(lme4,warn.conflicts=F, quietly=T)
+
+#factorize variables
+dat$wmTask<- as.factor(dat$wmTask)
+dat$trial.type<- as.factor(dat$trial.type)
+dat$block<- as.factor(dat$block)
+dat$answer.position <- as.factor(dat$answer.position)
+
+```
+# PART I: Location preference
+
+## Question 1: Descriptive statistics [5pt]
+
+a. First, you are asked to check the structure of the data. Include the code in your report and the answer.
+
+- How many participants (column `id`) are included in the data? 
+```{r}
+length(unique(dat$id))
+```
+<ans>There are 52 participants</ans>
+
+- How many trials *per subject* are included in the data? 
+    
+```{r}
+trialCount<-ddply(dat, c("id"), summarise, count = length(Trial))
+head(trialCount)
+```
+<ans>it changes between 95 and 96 trials for different subjects </ans>
+
+- How many trials did participants actually see in the experiment, when they completed the experiment? (Hints: 1) In the experiment four types of stories were presented, in random order. This data set contains only two of the story types (+TS and -TS), the other stories are excluded. 2) Don't look at the column trial.code as this provides the unique item number, of which four variants were created, fitting the four story types. )
+    
+<ans> currently with two stories we have 96/95 trials so if we were to calculate the count of unique trials in actual experiment, then our trial count becomes 4. It is the double of what our current data set tells us. In that case we multiply 96/95 with 2. That gives us 192/190 trials</ans>
+
+b. Now visualize the grand averages of whether participants chose the answer on the right side of the screen (column `answer.position`) for the different relevant conditions: 
+
+  - Calculate 4 averages per participant (i.e., proportion of answers that were on the right side), for the combination of the predictors `wmTask`, `block`, and `prev.error`.
+```{r}
+avgPerId <-ddply(dat, .(id,wmTask,block,prev.error), summarize, proportion = length(which(answer.position == "RIGHT")) /length(answer.position))
+```
+
+  - Calculate the general means for the 8 conditions based on the participants means calculated in Q1.a.
+    
+ - Calculate the SE (standard error of the mean) for the 8 conditions based on the participants means calculated in Q1.a.  (Hint: you could use the function `se` from the package `plotfunctions` or you could calculate the SE yourself: $SE=\frac{SD}{\sqrt{N}}$).
+    
+```{r}
+avgPerCond<-ddply(avgPerId, ~block+wmTask+prev.error,summarise,mean=mean(proportion),se=se(proportion))
+```
+
+c. Visualize the 8 condition averages with error bars ($\pm$ 1 SE). Two example plots with code (for different data) are provided to help you. But feel free to use other functions and code to visualize the data. Include the code and the plot. Make sure that the plot(s) meet the following criteria:
+
+    - Clear axis labels and title(s);
+    - Legend;
+    - Clear distinction between the conditions by color or other layout options.
+
+```{r}
+ggplot(avgPerCond, aes(y=mean, x=wmTask, color = prev.error, fill=block)) + geom_bar(position="dodge", stat="identity") + geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.2, position=position_dodge(.9))+  scale_colour_manual(name = "prev.error",values = c("green", "red")) + ggtitle("mean proportion values of right option for wmTask, prev.error and block variables")
+
+```
+
+## Question 2: Linear model [5pt]
+
+<br/>
+
+a. Set up a linear regression model that models whether participants were more likely to choose the right or left answer (`answer.position`, the dependent variable) depending on the WM task (`wmTask`), block (`block`), and whether the preceeding trial was answered correctly or not (`prev.error`). Include all interactions. Hints:
+
+    - The dependent variable `answer.position` has two values, and could be used as binomial predictor when it is converted to a factor (`dat$answer.position <- as.factor(dat$answer.position)`).
+    - As the dependent variable is binomial, make sure to tell the glm that we are dealing with binomial data.
+    - Check the number of values for `block`. Should this be a numerical predictor?
+    
+    <ans> No it should be factor variable </ans>
+
+```{r}
+# linear model
+fullmodel <- glm( answer.position ~ wmTask*block*prev.error, data = dat, family = binomial)
+summary(fullmodel)
+
+```
+
+b. Use a backward-fitting model comparison procedure to determine the best-fitting model. Include the code and your conclusions (i.e., for each comparison state shortly which model you prefer and why). Hint: use `anova(..., test="Chisq")` for model comparisons. 
+
+```{r}
+
+#create backward elimination by the R function step
+step(object = fullmodel, direction = "backward")
+
+#model suggested by backward elimination
+backwardSuggested<- glm(answer.position ~ wmTask + block + prev.error + wmTask:prev.error + block:prev.error, data = dat, family = binomial)
+
+
+#Let's try to find the same model manually
+altm1<- glm(answer.position ~ (wmTask + block + prev.error)^3 - wmTask:prev.error:block, data = dat, family = binomial)
+
+summary(altm1) #We can see here that the AIC value of altm1 model(6885.2) is lower than full model(6886.1) thus we are removing the threeway interaction
+
+#Let's check two way interactions now
+altm2<- glm(answer.position ~ (wmTask + block + prev.error)^2 - wmTask:prev.error, data = dat, family = binomial)
+
+summary(altm2) # AIC value is 6887 .We should include wmTask:prev.error interaction
+
+#Let's try removing another two way interaction
+altm3<- glm(answer.position ~ (wmTask + block + prev.error)^2 - wmTask:block, data = dat, family = binomial)
+
+summary(altm3) # AIC value is 6885.1. There is a 0.1 decrease down from altm1 model. altm3 model is the best model so far in terms of AIC value. We should remove wmTask:block interaction
+
+#Let's check the last two way interaction
+altm4<- glm(answer.position ~ (wmTask + block + prev.error)^2 - wmTask:block - block:prev.error, data = dat, family = binomial)
+
+summary(altm4) # AIC value is 6887.
+
+#Lets try removing all two way and threeway interactions
+altm5<- glm(answer.position ~ wmTask + block + prev.error, data = dat, family = binomial)
+
+summary(altm5) # AIC value is 6888.2. The AIC value is climbing up. Therefore we should end our search here and conclude whether to choose either altm1 or altm3 model.Check out the below answer for the justification of following code
+
+#comparison of full model with altm1 model
+anova(fullmodel,backwardSuggested, test="Chisq")
+
+```
+<ans>For this question, first we found the alternative models by R function "step". Then found the same model by manually discarding some predictors which gave us altm3 model. Based on the backward elimination method we reached the lowest AIC value of 6885.1 compared to fullmodel's AIC value of 6886.1. At each comparison we looked at the resulting AIC value when certain predictor or interaction of predictors is discarded. The trace of the step function printed the best model at the end. Based on the chisq variance test between full model and backward elimination suggested model, our deviance increases by 2.961 milllisecond and  degrees of freedom increases by 2 due to a simpler model (1 less interaction term). Considering the minute increase of residuals, we believed altm3/backwardSuggested model as a more simpler and generalizable model. However, along the way, we found a model altm1 with AIC value of 6885.2 which is very close to backwardSuggested model. Looking at the summary of this model we see that there are two additional significant interactions that didnt appear on the summary output of bacwardSuggested/altm3 model. These are wmTask6 digits:prev.errorincorrect and block2:prev.errorincorrect.</ans>
+
+<ans>The significant interactions in altm1 model doesnt automatically mean it should be the best model. Since the df,deviance,AIC value differences between backwardSuggested/altm3 and altm1 model is almost identical, we believe "the best" model depends on our priori assumptions and the theories taken from the literature. To present full scope of our results, both models (altm3/backwarSuggested and altm1) should be reported. However for the time being, we will choose *backwardSuggested model/altm3* model. Thus the following answers will be answered accordingly to that specifc model. </ans>
+
+
+## Question 3: Interpretation logistic regression [5pt]
+
+a. Logit values
+
+- Summarize in words how logit values are related to proportions.
+
+<ans>proportions are first represented as odds ratio. If a success probability of an event p is 0.8 then the odds ratio is (p/1-p) which is 4 in this case. Then the natural logarithm of the odds ratio value is taken and this gives us the logit value. We perform this transformation so that the short range of values that is between 0 and 1 which was probability before, turns into a range that is between negative infinity and positive infinity.</ans>
+
+- Which of the two levels  of `answer.position` is associated with higher logit values and which of the levels with lower logit values? Which function could be used to find out the coding that is used for these two levels?
+```{r}
+#we can see which level comes first
+levels(dat$answer.position)
+```
+<ans>Looking at the plot produced in QUESTION 1-C, it shows the proportions of button presses with regards to "RIGHT" option. From the plot we can infer that the overall LEFT has higher logit values due to RIGHT occuring less than 0.5 of the time. Since proporitons, odd ratio, and logit values are directly proportional, higher LEFT proportion values mean higher logit values.</ans>
+
+<ans>By default the reference level is the one that comes first in alphabetical order. We can see this order with "levels" function</ans>
+
+b. Inspect the summary of the best-fitting model. 
+```{r}
+summary(backwardSuggested)
+```
+
+- What does the intercept represent?
+
+<ans>log odds value(logit) of having left option chosen as answer.position when wmTask is 3 digits and block is first one and previous error is correct</ans>
+
+- Describe the model's estimates for the different conditions based on the summary. If your best-fitting model contains one or more interactions, describe the estimated interaction(s) based on the summary estimates. If your best-fitting model only contains main effects, describe whether and how these predictors influence the participants' answer preferences. 
+
+<ans>Looking at the summary,</ans>  
+
+<ans>MAIN EFFECTS:</ans>
+
+<ans>When participants are in the 6 digit condition but not in block2 and previous.error is correct, their log of odds value increase by 0.13171 on top of intercept (-0.07213) as an adjustment which equals to participant pressing left with increased probability.</ans> 
+
+<ans>When a participant is only at block 2 condition but has no 6 digit task and previous.error is correct, then the increase is 0.01795 on top of the intercept (-0.07213) as an adjusment.</ans>
+
+<ans>When a participant's previous.error is incorrect but has no 6 digit task and the block condition is 1, then the increase is 0.02030 on top of the intercept (-0.07213) as an adjusment.</ans>
+
+<ans>INTERACTION EFFECTS:</ans>
+
+<ans>On top of this, if a participant is both in 6 digit and previous.error is incorrect, then the initial increase due to 6 digit condition is modulated by the previous.error variable. More precisely, the resulting estimate then decreases by 0.31126 from whatever it was before</ans>
+
+<ans>However if this participant is both in block 2 and previous.error incorrect condition, then the initial increase due to block 2 condition is modulated by the previous.error variable. More precisely, the resulting estimate increases by 0.30798 from whatever it was before</ans>
+
+
+
+c. Fitted values
+
+- Below we retrieve the model's estimates for each condition on the logit scale, with the associated standard errors. Run the code and inspect the output. In which condition(s) do participants behave significantly different from chance performance? Explain why you concluded that the estimates in these conditions are different from chance. 
+
+```{r}
+newd <- expand.grid(wmTask = unique(dat$wmTask), 
+                    block=unique(dat$block), 
+                    prev.error=unique(dat$prev.error))
+
+# fitted effects on logit scale:
+fv <- predict.glm(backwardSuggested , newd, type='link', se.fit=TRUE) ## replace ... with your best-fitting model
+newd$fit <- fv$fit
+newd$se <- fv$se.fit
+# show estimates:
+newd
+```
+
+<ans>Based on the summary of best fitting model, we could see the wmTask 6 digit condition can cause participant to perform different than chance performance due to significance. The interpretation of the significant wmTask 6 digit condition in the context of our experiment then becomes: subject in the wmTask 6, prev.error "correct" , block "1" condition performs significantly higher than chance.Furthermore, since there is no interaction with wmTask6 that is significant we cannot make inferences in regards to significance for other condition combinations in the newd dataframe. Therefore in the newd dataframe only the condition that corresponds to the second row of the dataframe behaves significantly different from chance performance. </ans>
+
+<hr/>
+
+# PART II: Reading times
+
+In the second part of the assignment we would like to test whether working memory load and focus on the digit task affects the reading of the first word in the stories. The first word in the stories always introduced the first referent. The picture below visualizes the average reading times on the first sentence of the story for the two working memory conditions. We will only consider the reading time on the first word (Sentence position = 1).
+
+FIGURE (see html version)
+
+## Question 1: Data preparation [5pt]
+
+The column `referent1.RT` contains the reading times in miliseconds for reading the first word of the first sentence of each trial. 
+
+a. Distribution of the reading times.
+
+- Visualize the distribution of the reading times. Are the reading times normally distributed? If they do not follow a normal distribution, describe how they differ from normality. 
+    
+```{r}
+hist(dat$referent1.RT)
+```
+<br>
+<ans>The distribution of referent1.RT variable follows gamma distribution. The frequency of lower values in the range dominates the rest of the values which add up to nearly 70% of the all values</ans>
+
+- Are there obvious outliers that we should remove before the analysis? Explain why you would remove them. (Hint: Do not use the thresholds from a boxplot for removing outliers, because these assume a symmetrical distribution.)
+
+<ans>RTs equal or lower than 100ms looks unrealistic as reading times of an initial word in a sentence. Higher reaction times like 1500 to 1800 also looks suspicious, however we leave them as we dont have a goof enough reason for their removal</ans>
+
+- Remove outliers if necessary following the threshold that you explained in the previous question. Report how many data points you did remove (<number of observations> of <total number of observations>, percetage). Include the code.
+```{r}
+dat<-subset(dat, referent1.RT > 100)
+```
+<br>
+<ans>1395 observations of 4966 observations are removed. In total 28% of the initial data set is removed</ans>
+
+
+b. Transformation of reading times.
+
+- Name two commonly used transformations for reaction time data. (Hint: we have seen two in earlier lab sessions.)
+
+<ans>reciprocal transform and log transform</ans>
+
+- Choose the best transformation for the reading times. Explain why you choose this transformation. Include the code for transforming the reading times in your report.
+```{r}
+#log transform RTs
+dat$Log_referent1.RT<-log(dat$referent1.RT)
+hist(dat$Log_referent1.RT)
+```
+<br>
+<ans>Log transform approximated normal distribution better than reciprocal transform. The comparison was made by histogram plots of the reaction data</ans>
+
+c. Predictors.
+
+- Center (and optionally scale) the predictor `Trial`, complete the code below (replace the dots '...'):
+
+```{r}
+dat$cTrial<-scale(dat$Trial)
+```
+
+## Question 2: Analysis [5pt]
+
+
+a. Random intercepts model
+
+- Setup a LME model `m1` to investigate the effects of the WM task (`wmTask`) and trial (`cTrial`) and include random intercepts for participants (`id`) and items (`trial.code`). Run the model and include the code in your report.
+```{r}
+m1<-lmer(Log_referent1.RT ~ wmTask + cTrial + (1 | id) + (1 | trial.code), data = dat)
+```
+
+b. Include the summary output in your report. 
+```{r}
+summary(m1)
+```
+
+- Which of the two predictors shows more variation in reading times: participants or items? Explain how you can see this in the summary.
+
+<ans>Random effects part of our summary describes how much variability in the Log_referent1.RT variable is caused by the listed effects. Looking at this part we can see id variable has the highest contribution with the value of 0.098609.</ans>
+
+c. Random slopes model
+
+- Test with model comparisons which random slopes (for `wmTask` and `cTrial`) you need to include for participants and items. Include the code and output for the model comparisons in your report, and also a short note with each model comparison which model you prefer. Hint: include `REML=TRUE` in the models when comparing random effects, and use `anova(..., refit=FALSE)` for the model comparisons.
+    
+```{r}
+randomslopes1<-lmer(Log_referent1.RT ~ wmTask + cTrial + (1 + wmTask | id) + (1 + wmTask | trial.code), data = dat, REML=TRUE)
+
+randomslopes2<-lmer(Log_referent1.RT ~ wmTask + cTrial + (1 + cTrial | id) + (1+ cTrial  | trial.code), data = dat, REML=TRUE)
+
+randomslopes3<-lmer(Log_referent1.RT ~ wmTask + cTrial + (1 + wmTask | id) + (1+ cTrial  | trial.code), data = dat, REML=TRUE)
+
+randomslopes4<-lmer(Log_referent1.RT ~ wmTask + cTrial + (1 + cTrial | id) + (1+ wmTask  | trial.code), data = dat, REML=TRUE)
+
+anova(randomslopes4,randomslopes2,randomslopes3,randomslopes1, refit=FALSE)
+```
+<ans>Trying all different combinations of wmTask and cTrial with the random intercepts, we found the randomslopes1 model provides the lowest AIC,BIC,log likelihood and deviance values</ans>
+
+d. Fixed effects
+
+- With the random effects structure that you determined in the previous question, investigate whether the interaction between WM load (`wmTask`) and Trial (`cTrial`) is significant. Include the code, the output, and your conclusion in the report.
+
+```{r}
+mainEffectsModel<-lmer(Log_referent1.RT ~ wmTask+cTrial + (1 + wmTask | id) + (1+ wmTask  | trial.code), data = dat)
+
+interactionModel<-lmer(Log_referent1.RT ~ wmTask*cTrial + (1 + wmTask | id) + (1+ wmTask  | trial.code), data = dat)
+
+anova(mainEffectsModel,interactionModel)
+
+```
+<ans>yes the interaction effect creates a significant difference when compared to main effects only model</ans>
+
+
+## Question 3: Reporting the results [5pt]
+
+Write a short paragraph for a paper in which you report the reading time analysis. For this question only focus on the *fixed effects* (you can ignore the random effects for this assignment). Include the results of statistical tests. You can split up the paragraph in the following subsections:
+
+a. Describe how you determined the best-fitting model.
+
+<ans>First we performed log transformation on our reading times of the first word to approximate normal distribution. Next we centered the trial variable so that the mean of trial variable becomes 0. To discover the relationship between reading times and experiment predictors, we built a main effects model with fixed effects as working memory load and trial variable. Later, we compared main effects model with the interaction model in which we included interaction predictor of aforementioned variables. Interaction model proved to have significant difference over the main effects model.</ans>
+
+
+```{r}
+#Since the estimates are log tranformed, we transform back to normal values before reporting
+b0 <- exp(5.67295) #intercept
+b1Adjustment <- exp(5.67295 + 0.25767) #wmTask 6 digits
+b2Adjusment <- exp(5.67295 -0.12291) #cTrial
+InteractionTerm <- exp(5.67295 + 0.25767 - 0.12291 - 0.15916)
+
+#get the unscaled uncentered corresponding value of cTrial since our cTrial is at 0 due to centerin scaling
+unscaledMeanValue <-unscale(0, dat$cTrial) #The outputted value is 90.58. For convention I will round it up to 91 for the report.
+
+#find how much the cTrial estimate increases per trial(unscaled uncentered) for 3 digits condition
+perTrialChange3Digits <-(b2Adjusment - b0) / ((unscale(1, dat$cTrial)) - (unscale(0, dat$cTrial)))
+
+#find how much the cTrial estimate increases per trial(unscaled uncentered) for 6 digits condition (*INTERACTION EFFECT*)
+perTrialChange6Digits <-(InteractionTerm - exp(5.67295 + 0.25767 )) / ((unscale(1, dat$cTrial)) - (unscale(0, dat$cTrial)))
+
+
+#Also tried to get p values for the report but my internet search revealed that it is not a straight forward process to obtain p values. I avoided using p values in case it would change my estimates.
+
+#Lets have our summary ready before describing estimates
+summary(interactionModel)
+#Plot also helps to visualize the effects
+plot_model(interactionModel, type = "pred", terms = c("wmTask", "cTrial"))
+```
+
+b. Describe the model estimates for the effects of WM load and Trial (i.e., change in reading times over the course of the experiment) on the reading times.
+
+<ans>Based on our estimates retrieved from the interaction model, participants average speed is 290.89ms when the condition they are in is low working memory and the trial that they are in is 91. In this current condition while participant is progressing through the trials, for each trial on average there is a 0.6150014ms decrease throughout the experiment. Apart from this, when the participant is subjected to high working memory condition, the intercept is adjusted and increased by 85.5ms. Finally there is an interaction effect in which if the participant is in high working memory condition and progressing through the trials, on average, on top of previous effect of high working memory condition, there is an additional 1.691ms decrease for each trial </ans>
+
+
+

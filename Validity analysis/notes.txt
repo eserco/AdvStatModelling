@@ -1,0 +1,11 @@
+log(freq)
+
+s(log(freq))- if the edf(eeffective degres of fredom) of this variable is high then IT IS not linear (Aroud 4)
+
+if you have non linear relationship with the log(freq) then the residuals will be systematically istributed. which we dont want. It violates the linearity assumption
+
+do the reading
+
+figure out the y axs of plot with s(year, 8,14)...
+
+learn how to extract confidence intervals for the model.
