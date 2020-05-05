@@ -1,0 +1,23 @@
+GAM
+
+****
+S() 
+For continous non linear predictor. With the by argument we can define categorical interactions of another variable. 
+Example: s(x, by = y). Where x is continous and y is categorical.
+****
+
+****
+ti()
+This is for continous by continous interactions 
+
+modelTI =  s(Age) + s(Freq) + ti(Age,Freq)
+****
+
+
+*****
+te()
+This one is very similiar to ti() but the summary output also includes main effects.
+To model modelTI with te(), we just do modelTE = te(Age,Freq). In that sense they are almost identical. but te has less degrees of frededom
+modelTE smooths out more than the modelTI.
+
+*****
